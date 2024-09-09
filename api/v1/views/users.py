@@ -5,7 +5,6 @@ from werkzeug.utils import secure_filename
 from models.user import User
 from models import storage
 from api.v1.views import app_views
-from typing import Dict, Any
 from PIL import Image
 import os
 import imghdr

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from flask import jsonify, request
+from flask import jsonify, request, session
 from models import storage
 from models.artist import Artist
 from api.v1.views import app_views
@@ -18,6 +18,13 @@ MAX_CONTENT_LENGTH = 5 * 1000 * 1000
 @app_views.route('/artists', methods=['POST'], strict_slashes=False)
 def create_artist() -> str:
     """Create a new artist"""
+    if 'user_id' not in session:
+        return jsonify({"error": "No active session"}), 401
+
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({"error": "Unauthorized"}), 401
+
     name = request.form.get('name')
     bio = request.form.get('bio')
     if not name:
@@ -26,6 +33,7 @@ def create_artist() -> str:
     artist = Artist()
     artist.name = name
     artist.bio = bio
+    artist.user_id = user_id
     storage.new(artist)
     storage.save()
 
@@ -35,6 +43,13 @@ def create_artist() -> str:
 @app_views.route('/artists/<string:artist_id>', methods=['GET'], strict_slashes=False)
 def get_artist(artist_id: str) -> str:
     """Retrieve an artist by ID"""
+    if 'user_id' not in session:
+        return jsonify({"error": "No active session"}), 401
+
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({"error": "Unauthorized"}), 401
+
     artist = storage.get(Artist, artist_id)
     if not artist:
         return jsonify({"error": "Artist not found"}), 404
@@ -52,6 +67,13 @@ def get_artist(artist_id: str) -> str:
 @app_views.route('/artists/<string:artist_id>', methods=['PUT'], strict_slashes=False)
 def update_artist(artist_id: str) -> str:
     """Update an artist by ID"""
+    if 'user_id' not in session:
+        return jsonify({"error": "No active session"}), 401
+
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({"error": "Unauthorized"}), 401
+
     artist = storage.get(Artist, artist_id)
     if not artist:
         return jsonify({"error": "Artist not found"}), 404
@@ -70,6 +92,13 @@ def update_artist(artist_id: str) -> str:
 @app_views.route('/artists/<string:artist_id>', methods=['DELETE'], strict_slashes=False)
 def delete_artist(artist_id: str) -> str:
     """Delete an artist by ID"""
+    if 'user_id' not in session:
+        return jsonify({"error": "No active session"}), 401
+
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({"error": "Unauthorized"}), 401
+
     artist = storage.get(Artist, artist_id)
     if not artist:
         return jsonify({"error": "Artist not found"}), 404
@@ -98,6 +127,13 @@ def list_artists():
 @app_views.route('/artists/<string:artist_id>/profile-picture', methods=['POST'], strict_slashes=False)
 def update_artist_profile_picture(artist_id: str) -> str:
     """Update the specified artist's profile picture"""
+    if 'user_id' not in session:
+        return jsonify({"error": "No active session"}), 401
+
+    user_id = session.get('user_id')
+    if not user_id:
+        return jsonify({"error": "Unauthorized"}), 401
+
     artist = storage.get(Artist, artist_id)
     if not artist:
         return jsonify({"error": "Artist not found"}), 404
