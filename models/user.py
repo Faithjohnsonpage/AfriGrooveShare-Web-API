@@ -5,6 +5,7 @@ User class
 import bcrypt
 from sqlalchemy import Column, String, Text
 from models.base_model import BaseModel, Base
+from sqlalchemy.orm import relationship
 from typing import List, Dict, Any
 
 

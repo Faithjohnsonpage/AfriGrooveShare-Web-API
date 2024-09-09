@@ -2,10 +2,10 @@
 """
 Artist class
 """
-from sqlalchemy import Column, String, Text
+from sqlalchemy import Column, String, Text, ForeignKey
 from models.base_model import BaseModel, Base
 from sqlalchemy.orm import relationship
-from models.album import Album
+from models.user import User
 from typing import List, Dict, Any
 
 
@@ -17,9 +17,7 @@ class Artist(BaseModel, Base):
     name = Column(String(255), nullable=False)
     bio = Column(Text, nullable=True)
     profile_picture_url = Column(Text, nullable=True)
-
-    # Establish a bidirectional relationship with Album
-    albums = relationship('Album', backref='artist', cascade='all, delete-orphan')
+    user_id = Column(String(60), ForeignKey('Users.id'), nullable=False)
 
     def __init__(self, *args: List[Any], **kwargs: Dict[str, Any]) -> None:
         """Initializes Artist"""

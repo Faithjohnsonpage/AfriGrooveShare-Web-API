@@ -5,6 +5,7 @@ Album class
 from sqlalchemy import Column, String, Date, Text, ForeignKey
 from sqlalchemy.orm import relationship
 from models.base_model import BaseModel, Base
+from models.artist import Artist
 from typing import List, Dict, Any
 
 

@@ -8,6 +8,7 @@ from sqlalchemy.orm import relationship
 from models.base_model import BaseModel, Base
 from models.artist import Artist
 from models.genre import Genre
+from models.album import Album
 from typing import List, Dict, Any
 
 
@@ -22,9 +23,6 @@ class Music(BaseModel, Base):
     file_url = Column(Text, nullable=False)
     duration = Column(Integer, nullable=False)
     release_date = Column(Date, nullable=True)
-
-    # Relationship with Playlist through PlaylistMusic
-    #playlists = relationship('Playlist', secondary=playlist_music, viewonly=True)
 
     def __init__(self, *args: List[Any], **kwargs: Dict[str, Any]) -> None:
         """Initializes Music"""
