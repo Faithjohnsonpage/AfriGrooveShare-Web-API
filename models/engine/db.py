@@ -8,6 +8,7 @@ from os import getenv
 from typing import Type, List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 
+
 class DB:
     """Interacts with the MySQL database"""
 
@@ -17,7 +18,7 @@ class DB:
         AFRIGROOVE_PWD = getenv('AFRIGROOVE_PWD')
         AFRIGROOVE_HOST = getenv('AFRIGROOVE_HOST')
         AFRIGROOVE_DB = getenv('AFRIGROOVE_DB')
- 
+
         self.__engine = create_engine('mysql+mysqldb://{}:{}@{}/{}'.
                                       format(AFRIGROOVE_USER,
                                              AFRIGROOVE_PWD,
@@ -71,45 +72,8 @@ class DB:
     def count(self, cls: Type[BaseModel]) -> int:
         """Count the number of objects in a specific class"""
         return self.__session.query(cls).count()
-
-    def update(self, obj: BaseModel, **kwargs: Any) -> None:
-        """Update a specific object"""
-        for key, value in kwargs.items():
-            setattr(obj, key, value)
-        self.save()
-
-    def bulk_insert(self, objs: List[BaseModel]) -> None:
-        """Insert multiple objects at once"""
-        self.__session.bulk_save_objects(objs)
-        self.save()
-
-    def execute_raw_sql(self, query: str) -> List[Dict[str, Any]]:
-        """Execute raw SQL queries"""
-        result = self.__engine.execute(query)
-        return [dict(row) for row in result.fetchall()]
-
-    def rollback(self) -> None:
-        """Rollback the current database session"""
-        if self.__session:
-            self.__session.rollback()
-
+ 
     def exists(self, cls: Type[BaseModel], **kwargs: Any) -> bool:
         """Check if an object with specific criteria exists"""
         return self.__session.query(cls).filter_by(**kwargs).first() \
-                    is not None
-
-    def get_or_create(self,
-                      cls: Type[BaseModel],
-                      defaults: Optional[Dict[str, Any]] = None,
-                      **kwargs: Any
-                      ) -> BaseModel:
-        """Retrieve an object if it exists, otherwise create it"""
-        instance = self.filter_by(cls, **kwargs).first()
-        if instance:
-            return instance
-        else:
-            params = {**kwargs, **(defaults or {})}
-            instance = cls(**params)
-            self.new(instance)
-            self.save()
-            return instance
+            is not None

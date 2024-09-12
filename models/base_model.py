@@ -47,7 +47,9 @@ class BaseModel:
         """Returns a string representation of the class"""
         return f"[{self.__class__.__name__}] ({self.id}) {self.__dict__}"
 
-    def to_dict(self, save_fs: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def to_dict(self,
+                save_fs: Optional[Dict[str, Any]] = None
+                ) -> Dict[str, Any]:
         """Returns a dictionary containing all keys/values of the instance"""
         new_dict = self.__dict__.copy()
         if "created_at" in new_dict:

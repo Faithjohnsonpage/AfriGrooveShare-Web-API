@@ -13,11 +13,11 @@ class Artist(BaseModel, Base):
     """Representation of an Artist class"""
 
     __tablename__ = 'Artists'
-    
+
     name = Column(String(255), nullable=False)
     bio = Column(Text, nullable=True)
     profile_picture_url = Column(Text, nullable=True)
-    user_id = Column(String(60), ForeignKey('Users.id'), nullable=False)
+    user_id = Column(String(60), ForeignKey('Users.id', ondelete='CASCADE'), nullable=False)
 
     def __init__(self, *args: List[Any], **kwargs: Dict[str, Any]) -> None:
         """Initializes Artist"""

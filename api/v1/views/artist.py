@@ -111,7 +111,16 @@ def delete_artist(artist_id: str) -> str:
 @app_views.route('/artists', methods=['GET'], strict_slashes=False)
 def list_artists():
     """List all artists"""
+    page = int(request.args.get('page', 1))
+    limit = int(request.args.get('limit', 10))
+
     artists = storage.all(Artist)
+
+    # Pagination
+    total_count = len(artists)
+    start_index = (page - 1) * limit
+    end_index = page * limit
+    artists_files = artists[start_index:end_index]
 
     return jsonify({
         "artists": [
@@ -119,8 +128,11 @@ def list_artists():
                 "id": artist.id,
                 "name": artist.name,
                 "profile_picture_url": artist.profile_picture_url
-            } for artist in artists
-        ]
+            } for artist in artists_files
+        ],
+        "total": total_count,
+        "page": page,
+        "limit": limit
     }), 200
 
 

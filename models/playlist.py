@@ -22,6 +22,7 @@ playlist_music = Table(
            onupdate='CASCADE', ondelete='CASCADE'), nullable=False)
 )
 
+
 class Playlist(BaseModel, Base):
     """Representation of a Playlist class"""
     __tablename__ = 'Playlists'
@@ -39,7 +40,10 @@ class Playlist(BaseModel, Base):
         """Initializes Playlist"""
         super().__init__(*args, **kwargs)
 
-    def add_music(self, cls: Type[BaseModel], cls_id: str, music: Music) -> None:
+    def add_music(self,
+                  cls: Type[BaseModel],
+                  cls_id: str, music: Music
+                  ) -> None:
         """Add music to the playlist"""
         playlist = storage.get(cls, cls_id)
         if playlist is None:
@@ -47,7 +51,10 @@ class Playlist(BaseModel, Base):
         playlist.music.append(music)
         playlist.save()
 
-    def remove_music(self, cls: Type[BaseModel], cls_id: str, music: Music) -> None:
+    def remove_music(self,
+                     cls: Type[BaseModel],
+                     cls_id: str, music: Music
+                     ) -> None:
         """Remove music from the playlist"""
         playlist = storage.get(cls, cls_id)
         if playlist is None:

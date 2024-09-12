@@ -9,9 +9,12 @@ predefined_genres = ["Pop", "Rock", "Jazz", "Classical",
                      "Hip-Hop", "Gospel", "Electronic", "Reggae", "Blues"]
 
 for genre_name in predefined_genres:
-    genre = Genre()
-    genre.name = genre_name
-    storage.new(genre)
+    existing_genre = storage.filter_by(Genre, name=genre_name)
+    
+    if not existing_genre:
+        genre = Genre()
+        genre.name = genre_name
+        storage.new(genre)
 
 storage.save()
 

@@ -11,7 +11,6 @@ from typing import List, Dict, Any
 
 class User(BaseModel, Base):
     """Representation of a User class"""
-
     __tablename__ = 'Users' 
 
     username = Column(String(255), nullable=False)
@@ -37,4 +36,3 @@ class User(BaseModel, Base):
     def verify_password(self, password: str) -> bool:
         """Verify a password against the stored hash"""
         return bcrypt.checkpw(password.encode(), self.password_hash.encode())
-

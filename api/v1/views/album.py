@@ -112,10 +112,18 @@ def get_album(album_id: str) -> str:
 
 
 @app_views.route('/albums', methods=['GET'], strict_slashes=False)
-def list_albums():
+def list_albums() -> str:
     """List all albums"""
+    page = int(request.args.get('page', 1))
+    limit = int(request.args.get('limit', 10))
+
     albums = storage.all(Album)
-    print('that')
+
+    # Pagination
+    total_count = len(albums)
+    start_index = (page - 1) * limit
+    end_index = page * limit
+    album_files = albums[start_index:end_index]
 
     # Prepare list of albums with artist details
     return jsonify({
@@ -128,8 +136,11 @@ def list_albums():
                     "name": storage.get(Artist, album.artist_id).name
                 },
                 "releaseDate": str(album.release_date),
-            } for album in albums
-        ]
+            } for album in album_files
+        ],
+        "total": total_count,
+        "page": page,
+        "limit": limit
     }), 200
 
 

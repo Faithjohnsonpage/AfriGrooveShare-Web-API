@@ -8,11 +8,11 @@ playlist = Playlist()
 # IDs of existing playlists and music
 playlist_id_1 = '068b2bad-ad39-495e-acdb-f5550484444b'
 playlist_id_2 = '4b9cb69d-cbeb-4143-ae09-59acea221534'
-music_id_1 = '93fdae4b-d883-46dc-8c42-909df903b02a'
-music_id_2 = '56d76968-0eb4-40ce-b4bb-355205086ac5'
-music_id_3 = '7b203acb-ade7-4a24-87a8-d11f389f91f6'
-music_id_4 = 'b947ec8b-7759-4a53-a618-44e7ce83bdc2'
-music_id_5 = 'babbf717-c1cc-4085-9e3e-efb8853db289'
+music_id_1 = '33ccc54e-04fb-4a5e-afe9-fceb2d1c00a2'
+music_id_2 = '4c3bf4a5-ed88-42ae-aebd-36bdd60e8a29'
+music_id_3 = '72e00bda-e76d-4853-8bc6-7048d9849918'
+music_id_4 = '981289ef-3f9d-490b-bc6b-7c2b3d6f996d'
+music_id_5 = 'f3721bb4-7458-4f83-8ba5-087f7176f9a6'
 
 # Fetch the existing playlists and music from the database
 playlist_1 = storage.get(Playlist, playlist_id_1)

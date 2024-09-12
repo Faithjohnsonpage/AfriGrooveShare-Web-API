@@ -17,8 +17,8 @@ class Music(BaseModel, Base):
     __tablename__ = 'Music'
 
     title = Column(String(255), nullable=False)
-    artist_id = Column(String(60), ForeignKey('Artists.id'), nullable=False)
-    album_id = Column(String(60), ForeignKey('Albums.id'), nullable=False)
+    artist_id = Column(String(60), ForeignKey('Artists.id', ondelete='CASCADE'), nullable=False)
+    album_id = Column(String(60), ForeignKey('Albums.id', ondelete='CASCADE'), nullable=False)
     genre_id = Column(String(60), ForeignKey('Genres.id'), nullable=False)
     file_url = Column(Text, nullable=False)
     duration = Column(Integer, nullable=False)
