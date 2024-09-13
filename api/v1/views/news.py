@@ -7,7 +7,7 @@ from api.v1.views import app_views
 
 
 @app_views.route('/news', methods=['POST'], strict_slashes=False)
-def create_news():
+def create_news() -> str:
     """Create a news article"""
     if 'user_id' not in session:
         return jsonify({"error": "No active session"}), 401
@@ -47,8 +47,8 @@ def create_news():
     return jsonify({"message": "News created successfully", "newsId": news.id}), 201
 
 
-@app_views.route('/news/<news_id>', methods=['GET'], strict_slashes=False)
-def get_news(news_id):
+@app_views.route('/news/<string:news_id>', methods=['GET'], strict_slashes=False)
+def get_news(news_id: str) -> str:
     """Retrieve a news article by ID"""
     news = storage.get(News, news_id)
     if not news:
@@ -64,8 +64,8 @@ def get_news(news_id):
     }), 200
 
 
-@app_views.route('/news/<news_id>', methods=['PUT'], strict_slashes=False)
-def update_news(news_id):
+@app_views.route('/news/<string:news_id>', methods=['PUT'], strict_slashes=False)
+def update_news(news_id: str) -> str:
     """Update a news article by ID"""
     if 'user_id' not in session:
         return jsonify({"error": "No active session"}), 401
@@ -88,8 +88,8 @@ def update_news(news_id):
     return jsonify({"message": "News updated successfully"}), 200
 
 
-@app_views.route('/news/<news_id>', methods=['DELETE'], strict_slashes=False)
-def delete_news(news_id):
+@app_views.route('/news/<string:news_id>', methods=['DELETE'], strict_slashes=False)
+def delete_news(news_id: str) -> str:
     """Delete a news article by ID"""
     if 'user_id' not in session:
         return jsonify({"error": "No active session"}), 401
@@ -108,7 +108,7 @@ def delete_news(news_id):
 
 
 @app_views.route('/news', methods=['GET'], strict_slashes=False)
-def list_news():
+def list_news() -> str:
     """List all news articles"""
     page = int(request.args.get('page', 1))
     limit = int(request.args.get('limit', 10))

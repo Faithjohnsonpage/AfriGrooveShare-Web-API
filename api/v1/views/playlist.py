@@ -34,8 +34,8 @@ def create_playlist():
     return jsonify({"message": "Playlist created successfully", "playlistId": playlist.id}), 201
 
 
-@app_views.route('/playlists/<playlist_id>', methods=['POST'], strict_slashes=False)
-def update_playlist(playlist_id):
+@app_views.route('/playlists/<string:playlist_id>', methods=['POST'], strict_slashes=False)
+def update_playlist(playlist_id) -> str:
     """Update a playlist, either by editing or adding music"""
     if 'user_id' not in session:
         return jsonify({"error": "No active session"}), 401
@@ -107,8 +107,8 @@ def update_playlist(playlist_id):
     return jsonify({"error": "Invalid action provided"}), 400
 
 
-@app_views.route('/playlists/<playlist_id>', methods=['DELETE'], strict_slashes=False)
-def delete_playlist(playlist_id):
+@app_views.route('/playlists/<string:playlist_id>', methods=['DELETE'], strict_slashes=False)
+def delete_playlist(playlist_id: str) -> str:
     """Delete a playlist"""
     # Check if the user is logged in
     if 'user_id' not in session:
@@ -134,8 +134,8 @@ def delete_playlist(playlist_id):
     return jsonify({"message": "Playlist deleted successfully"}), 200
 
 
-@app_views.route('/playlists/<playlist_id>', methods=['GET'], strict_slashes=False)
-def get_playlist(playlist_id):
+@app_views.route('/playlists/<string:playlist_id>', methods=['GET'], strict_slashes=False)
+def get_playlist(playlist_id: str) -> str:
     """Retrieve a playlist by ID"""
     playlist = storage.get(Playlist, playlist_id)
     if not playlist:

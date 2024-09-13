@@ -137,15 +137,17 @@ def stream_music(music_id: str) -> Response:
     if not music:
         return jsonify({"error": "Music file not found"}), 404
 
-    file_path = os.path.join(current_app.config['MUSIC_UPLOAD_FOLDER'], music.file_name)
+    file_path = music.file_url
     
-    if not os.path.exists(file_path):
+    if not file_path:
         return jsonify({"error": "File not found"}), 404
 
     def generate():
         with open(file_path, 'rb') as music_file:
-            while chunk := music_file.read(4096):
-                yield chunk
+            data = music_file.read(1024)
+            while data:
+                yield data
+                data = music_file.read(1024)
 
     return Response(generate(), mimetype="audio/mpeg")
 
