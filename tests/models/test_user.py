@@ -4,6 +4,7 @@ from models import storage
 from datetime import datetime
 from models.user import User
 
+
 class TestUserDatabase(unittest.TestCase):
 
     def setUp(self):

@@ -5,6 +5,7 @@ from models import storage
 from models.artist import Artist
 from models.user import User
 
+
 class TestArtistDatabase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
