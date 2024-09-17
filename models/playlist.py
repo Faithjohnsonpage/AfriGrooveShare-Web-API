@@ -33,8 +33,7 @@ class Playlist(BaseModel, Base):
                      nullable=False)
 
     # Relationship with Music through PlaylistMusic
-    music = relationship('Music', secondary=playlist_music,
-                         backref='Playlists')
+    music = relationship('Music', secondary=playlist_music, backref='Playlists')
 
     def __init__(self, *args: List[Any], **kwargs: Dict[str, Any]) -> None:
         """Initializes Playlist"""

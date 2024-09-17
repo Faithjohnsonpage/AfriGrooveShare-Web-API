@@ -14,7 +14,6 @@ app = Flask(__name__)
 # Flask-Session configuration
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
 app.config['SESSION_TYPE'] = 'sqlalchemy'
-#app.config['SESSION_SQLALCHEMY'] = storage.get_engine()
 app.config['SQLALCHEMY_DATABASE_URI'] = storage.get_engine().url
 app.config['SESSION_SQLALCHEMY_TABLE'] = 'sessions'
 app.config['SESSION_USE_SIGNER'] = True

@@ -16,7 +16,7 @@ class News(BaseModel, Base):
     title = Column(String(255), nullable=False)
     content = Column(Text, nullable=False)
     author = Column(String(255), nullable=True)
-    category = Column(String(255), nullable=True)
+    category = Column(String(255), nullable=False)
     user_id = Column(String(60), ForeignKey('Users.id', ondelete='CASCADE'), nullable=False)
 
     def __init__(self, *args: List[Any], **kwargs: Dict[str, Any]) -> None:

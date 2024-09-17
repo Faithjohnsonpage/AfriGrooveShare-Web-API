@@ -214,7 +214,6 @@ def update_profile_picture() -> str:
 
     # Check the file's signature (magic number)
     file_type = imghdr.what(file)
-    print(file_type)
     if not file_type or file_type not in ALLOWED_EXTENSIONS:
         return jsonify({"error": "Invalid file type"}), 400
 

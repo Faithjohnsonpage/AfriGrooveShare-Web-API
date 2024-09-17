@@ -18,12 +18,16 @@ class DB:
         AFRIGROOVE_PWD = getenv('AFRIGROOVE_PWD')
         AFRIGROOVE_HOST = getenv('AFRIGROOVE_HOST')
         AFRIGROOVE_DB = getenv('AFRIGROOVE_DB')
+        AFRIGROOVE_ENV = getenv('AFRIGROOVE_ENV')
 
         self.__engine = create_engine('mysql+mysqldb://{}:{}@{}/{}'.
                                       format(AFRIGROOVE_USER,
                                              AFRIGROOVE_PWD,
                                              AFRIGROOVE_HOST,
                                              AFRIGROOVE_DB))
+
+        if AFRIGROOVE_ENV == "test":
+            Base.metadata.drop_all(self.__engine)
 
     def get_engine(self):
         """Return the SQLAlchemy engine"""
@@ -56,7 +60,7 @@ class DB:
 
     def get(self, cls: Type[BaseModel], id: str) -> Optional[BaseModel]:
         """Retrieve an object by its primary key"""
-        return self.__session.query(cls).get(id)
+        return self.__session.get(cls, id)
 
     def all(self, cls: Type[BaseModel]) -> List[BaseModel]:
         """Retrieve all objects of a specific class"""
