@@ -58,14 +58,13 @@ The `tests/` directory contains unit tests and integration tests for the AfriGro
   - **`test_music.py`**: Tests for the `Music` model.
   - **`test_playlist.py`**: Tests for the `Playlist` model.
 
+---
+
 ## Setup
 
 ```
 $ pip3 install -r requirements.txt
 ```
-
-Here's how you might write the `Run` section using the provided template:
-
 ---
 
 ## Run
@@ -100,6 +99,7 @@ python3 -m unittest discover -s tests
 ```
 
 Ensure that the database and necessary tables are set up before running the application or tests.
+---
 
 ## Routes
 
