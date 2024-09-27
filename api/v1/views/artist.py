@@ -8,6 +8,18 @@ from PIL import Image
 import os
 import imghdr
 import uuid
+import logging
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler("artist.log"),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
 
 UPLOAD_FOLDER = 'api/v1/uploads/artist_pics'
@@ -19,15 +31,18 @@ MAX_CONTENT_LENGTH = 5 * 1000 * 1000
 def create_artist() -> str:
     """Create a new artist"""
     if 'user_id' not in session:
+        logger.warning("Unauthorized access attempt to create artist.")
         return jsonify({"error": "No active session"}), 401
 
     user_id = session.get('user_id')
     if not user_id:
+        logger.error("Unauthorized access, session found but user_id missing.")
         return jsonify({"error": "Unauthorized"}), 401
 
     name = request.form.get('name')
     bio = request.form.get('bio')
     if not name:
+        logger.warning("Artist creation failed due to missing name.")
         return jsonify({"error": "Missing name"}), 400
 
     artist = Artist()
@@ -37,6 +52,7 @@ def create_artist() -> str:
     storage.new(artist)
     storage.save()
 
+    logger.info(f"Artist {artist.name} (ID: {artist.id}) created successfully by user {user_id}.")
     return jsonify({"message": "Artist created successfully", "artistId": artist.id}), 201
 
 
@@ -44,16 +60,20 @@ def create_artist() -> str:
 def get_artist(artist_id: str) -> str:
     """Retrieve an artist by ID"""
     if 'user_id' not in session:
+        logger.warning("Unauthorized access attempt to get artist details.")
         return jsonify({"error": "No active session"}), 401
 
     user_id = session.get('user_id')
     if not user_id:
+        logger.error("Unauthorized access, session found but user_id missing.")
         return jsonify({"error": "Unauthorized"}), 401
 
     artist = storage.get(Artist, artist_id)
     if not artist:
+        logger.warning(f"Artist with ID {artist_id} not found.")
         return jsonify({"error": "Artist not found"}), 404
 
+    logger.info(f"Artist {artist.name} (ID: {artist_id}) retrieved by user {user_id}.")
     return jsonify({
         "artist": {
             "id": artist.id,
@@ -68,14 +88,17 @@ def get_artist(artist_id: str) -> str:
 def update_artist(artist_id: str) -> str:
     """Update an artist by ID"""
     if 'user_id' not in session:
+        logger.warning("Unauthorized access attempt to update artist.")
         return jsonify({"error": "No active session"}), 401
 
     user_id = session.get('user_id')
     if not user_id:
+        logger.error("Unauthorized access, session found but user_id missing.")
         return jsonify({"error": "Unauthorized"}), 401
 
     artist = storage.get(Artist, artist_id)
     if not artist:
+        logger.warning(f"Artist with ID {artist_id} not found.")
         return jsonify({"error": "Artist not found"}), 404
 
     name = request.form.get('name')
@@ -86,6 +109,7 @@ def update_artist(artist_id: str) -> str:
         artist.bio = bio
 
     storage.save()
+    logger.info(f"Artist {artist.name} (ID: {artist_id}) updated by user {user_id}.")
     return jsonify({"message": "Artist updated successfully"}), 200
 
 
@@ -93,18 +117,22 @@ def update_artist(artist_id: str) -> str:
 def delete_artist(artist_id: str) -> str:
     """Delete an artist by ID"""
     if 'user_id' not in session:
+        logger.warning("Unauthorized access attempt to delete artist.")
         return jsonify({"error": "No active session"}), 401
 
     user_id = session.get('user_id')
     if not user_id:
+        logger.error("Unauthorized access, session found but user_id missing.")
         return jsonify({"error": "Unauthorized"}), 401
 
     artist = storage.get(Artist, artist_id)
     if not artist:
+        logger.warning(f"Artist with ID {artist_id} not found.")
         return jsonify({"error": "Artist not found"}), 404
 
     storage.delete(artist)
     storage.save()
+    logger.info(f"Artist {artist.name} (ID: {artist_id}) deleted by user {user_id}.")
     return jsonify({"message": "Artist deleted successfully"}), 200
 
 
@@ -122,6 +150,7 @@ def list_artists():
     end_index = page * limit
     artists_files = artists[start_index:end_index]
 
+    logger.info(f"User requested list of artists, page {page}, limit {limit}.")
     return jsonify({
         "artists": [
             {
@@ -140,28 +169,34 @@ def list_artists():
 def update_artist_profile_picture(artist_id: str) -> str:
     """Update the specified artist's profile picture"""
     if 'user_id' not in session:
+        logger.warning("Unauthorized access attempt to update artist profile picture.")
         return jsonify({"error": "No active session"}), 401
 
     user_id = session.get('user_id')
     if not user_id:
+        logger.error("Unauthorized access, session found but user_id missing.")
         return jsonify({"error": "Unauthorized"}), 401
 
     artist = storage.get(Artist, artist_id)
     if not artist:
+        logger.warning(f"Artist with ID {artist_id} not found.")
         return jsonify({"error": "Artist not found"}), 404
 
     # Check if the file is in the request
     file = request.files.get('file')
     if not file:
+        logger.warning("No file uploaded for artist profile picture update.")
         return jsonify({"error": "No file uploaded"}), 400
 
     # Check if the file size is within the limit
     if request.content_length > MAX_CONTENT_LENGTH:
+        logger.warning("Uploaded file exceeds maximum allowed size.")
         return jsonify({"error": "File is too large"}), 400
 
     # Check the file's signature (magic number)
     file_type = imghdr.what(file)
     if not file_type or file_type not in ALLOWED_EXTENSIONS:
+        logger.warning("Invalid file type uploaded.")
         return jsonify({"error": "Invalid file type"}), 400
 
     # Ensure upload directory exists
@@ -179,9 +214,10 @@ def update_artist_profile_picture(artist_id: str) -> str:
         image.thumbnail((500, 500))
         image.save(thumbnail_path)
     except Exception as e:
+        logger.error(f"Error processing image for artist {artist_id}: {str(e)}")
         return jsonify({"error": "Error processing image"}), 500
 
     artist.profile_picture_url = thumbnail_path
     storage.save()
-
+    logger.info(f"Profile picture for artist {artist_id} updated successfully.")
     return jsonify({"message": "Profile picture updated successfully"}), 200

@@ -14,6 +14,18 @@ import mimetypes
 from io import BytesIO
 import magic
 from flask import current_app
+import logging
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler("music.log"),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
 
 UPLOAD_FOLDER = 'api/v1/uploads/music'
@@ -24,12 +36,14 @@ MAX_CONTENT_LENGTH = 10 * 1000 * 1000
 def upload_music() -> str:
     """Upload a new music file."""
     if 'user_id' not in session:
+        logger.warning('Upload failed: No active session')
         return jsonify({"error": "No active session"}), 401
 
     user_id = session.get('user_id')
     user = storage.get(User, user_id)
 
     if not user:
+        logger.warning(f'Upload failed: User {user_id} not found')
         return jsonify({"error": "User not found"}), 404
 
     title = request.form.get('title')
@@ -42,17 +56,21 @@ def upload_music() -> str:
 
     # Check if required fields are provided
     if not title or not genre or not file:
+        logger.error(f'Upload failed: Missing required fields for user {user_id}')
         return jsonify({"error": "Missing required fields"}), 400
 
     artist = storage.filter_by(Artist, name=artist_name)
     if not artist:
+        logger.error(f'Upload failed: Artist {artist_name} not found for user {user_id}')
         return jsonify({"error": "Artist not found"}), 404
 
     if artist.user_id != user.id:
+        logger.error(f'Unauthorized upload attempt by user {user_id} for artist {artist_name}')
         return jsonify({"error": "Unauthorized: You are not the owner of this artist"}), 403
 
     # Check if the file size exceeds the limit
     if request.content_length > MAX_CONTENT_LENGTH:
+        logger.error(f'Upload failed: File size exceeds the limit for user {user_id}')
         return jsonify({"error": "File is too large"}), 400
 
     # Check if the duration is in MM:SS format
@@ -60,6 +78,7 @@ def upload_music() -> str:
         minutes, seconds = map(int, duration_str.split(':'))
         duration = (minutes * 60) + seconds  # Convert to total seconds
     except ValueError:
+        logger.error(f'Upload failed: Invalid duration format by user {user_id}')
         return jsonify({"error": "Invalid duration format. Use MM:SS."}), 400
 
     # Validate the file's MIME type
@@ -67,9 +86,11 @@ def upload_music() -> str:
     mime_type, _ = mimetypes.guess_type(filename)
 
     if mime_type != 'audio/mpeg':
+        logger.error(f'Upload failed: Invalid file type {mime_type} for user {user_id}')
         return jsonify({"error": "Invalid file type, only MP3 is allowed"}), 400
 
     if not file.filename.endswith('.mp3'):
+        logger.error(f'Upload failed: Invalid file extension {file.filename} for user {user_id}')
         return jsonify({"error": "Invalid file extension. Only .mp3 files are allowed."}), 400
 
     # Ensure the upload directory exists
@@ -77,13 +98,16 @@ def upload_music() -> str:
 
     music_path = os.path.join(UPLOAD_FOLDER, filename)
     file.save(music_path)
+    logger.info(f'File {filename} saved successfully for user {user_id}')
 
     album = storage.filter_by(Album, title=album)
     if not album:
+        logger.error(f'Upload failed: Album {album} not found for user {user_id}')
         return jsonify({"error": "Album not found"}), 404
 
     genre_obj = storage.filter_by(Genre, name=genre)
     if not genre_obj:
+        logger.error(f'Upload failed: Genre {genre} not found for user {user_id}')
         return jsonify({"error": "Genre not found"}), 404
 
     new_music = Music()
@@ -97,6 +121,7 @@ def upload_music() -> str:
     storage.new(new_music)
     storage.save()
 
+    logger.info(f'Music {title} uploaded successfully by user {user_id}')
     return jsonify({"message": "Music uploaded successfully", "musicId": new_music.id}), 201
 
 
@@ -106,6 +131,7 @@ def get_music_metadata(music_id: str) -> str:
     music = storage.get(Music, music_id)
 
     if not music:
+        logger.warning(f'Metadata request failed: Music {music_id} not found')
         return jsonify({"error": "Music not found"}), 404
 
     # Retrieve associated album, artist, and genre information
@@ -126,6 +152,7 @@ def get_music_metadata(music_id: str) -> str:
         "uploadDate": music.created_at.strftime('%Y-%m-%d')
     }
 
+    logger.info(f'Metadata for music {music_id} retrieved successfully')
     return jsonify(music_data), 200
 
 
@@ -135,11 +162,13 @@ def stream_music(music_id: str) -> Response:
     music = storage.get(Music, music_id)
     
     if not music:
+        logger.warning(f'Stream request failed: Music {music_id} not found')
         return jsonify({"error": "Music file not found"}), 404
 
     file_path = music.file_url
     
     if not file_path:
+        logger.warning(f'Stream request failed: File for music {music_id} not found')
         return jsonify({"error": "File not found"}), 404
 
     def generate():
@@ -149,6 +178,7 @@ def stream_music(music_id: str) -> Response:
                 yield data
                 data = music_file.read(1024)
 
+    logger.info(f'Music {music_id} streaming started')
     return Response(generate(), mimetype="audio/mpeg")
 
 
@@ -203,6 +233,7 @@ def list_music_files() -> str:
         }
         music_list.append(music_metadata)
 
+    logger.info(f'List of music files retrieved successfully (page {page}, limit {limit})')
     return jsonify({
         "music": music_list,
         "total": total_count,
@@ -230,6 +261,7 @@ def search_music() -> str:
     query_str = request.data.decode('utf-8').strip()
 
     if not query_str:
+        logger.warning('Search request failed: No search query provided')
         return jsonify({"error": "No search query provided"}), 400
 
     # Fetch all relevant data
@@ -264,4 +296,5 @@ def search_music() -> str:
         } for m in matching_music
     ]
 
+    logger.info(f'Search query "{query_str}" completed successfully')
     return jsonify(music_list), 200

@@ -9,6 +9,18 @@ from PIL import Image
 import os
 import imghdr
 import uuid
+import logging
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler("users.log"),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
 
 UPLOAD_FOLDER = 'api/v1/uploads/profile_pics'
@@ -24,10 +36,12 @@ def register() -> str:
     password = request.form.get("password")
 
     if not username or not email or not password:
+        logger.warning("Attempted registration with missing fields")
         return jsonify({"error": "Missing fields"}), 400
     
     # Check if the email is already registered
     if storage.exists(User, email=email):
+        logger.info(f"Email {email} already registered")
         return jsonify({"error": "Email already registered"}), 400
 
     # Create and save the new user
@@ -38,6 +52,7 @@ def register() -> str:
     storage.new(user)
     storage.save()
 
+    logger.info(f"New user registered: {username} ({email})")
     return jsonify({"message": "User registered successfully", "userId": user.id}), 201
 
 
@@ -48,15 +63,18 @@ def login() -> str:
     password = request.form.get("password")
     
     if not email or not password:
+        logger.warning("Login attempt with missing fields")
         return jsonify({"error": "Missing fields"}), 400
 
     user = storage.filter_by(User, email=email)
     
     if not user or not user.verify_password(password):
+        logger.warning(f"Failed login attempt for email: {email}")
         return jsonify({"error": "Invalid email or password"}), 401
     
     # Set user_id in session
     session['user_id'] = user.id
+    logger.info(f"User {user.username} logged in successfully")
     return jsonify({"message": "Logged in successfully", "userId": user.id}), 200
 
 
@@ -65,7 +83,9 @@ def logout() -> str:
     """Invalidate the user's session"""
     if 'user_id' in session:
         session.clear()
+        logging.info(f"User {user_id} logged out successfully.")
         return jsonify({"message": "Logged out successfully"}), 200
+    logging.info("Logout attempt with no active session.")
     return jsonify({"error": "No active session"}), 400
 
 
@@ -73,17 +93,20 @@ def logout() -> str:
 def get_profile() -> str:
     """Retrieve the authenticated user's profile"""
     if 'user_id' not in session:
+        logging.info("Profile access attempt with no active session.")
         return jsonify({"error": "No active session"}), 401
 
     user_id = session.get('user_id')
     if not user_id:
+        logging.error(f"User {user_id} not found.")
         return jsonify({"error": "Unauthorized"}), 401
 
     user = storage.get(User, user_id)
     
     if not user:
         return jsonify({"error": "User not found"}), 404
-    
+
+    logging.info(f"User {user_id} retrieved their profile successfully.")
     return jsonify({
         "user": {
             "id": user.id,
@@ -100,27 +123,31 @@ def update_profile() -> str:
     user_id = session.get('user_id')
 
     if not user_id:
+        logging.info("Unauthorized profile update attempt.")
         return jsonify({"error": "Unauthorized"}), 401
 
     username = request.form.get('username')
     
     if not username or username.strip() == "":
+        logging.info(f"User {user_id} attempted to update profile with no username.")
         return jsonify({"error": "Username is required"}), 400
 
     user = storage.get(User, user_id)
 
     if not user:
+        logging.error(f"User {user_id} not found during profile update.")
         return jsonify({"error": "User not found"}), 404
 
     # Ensure the new username is not already taken
     existing_user = storage.filter_by(User, username=username)
     if existing_user and existing_user.id != user_id:
+        logging.info(f"User {user_id} attempted to use an already existing username: {username}.")
         return jsonify({"error": "Username already exists"}), 400
 
     # Update username
     user.username = username
     storage.save()
-
+    logging.info(f"User {user_id} updated their profile successfully.")
     return jsonify({"message": "Profile updated successfully"}), 200
 
 
@@ -130,19 +157,20 @@ def request_password_reset() -> str:
     email = request.form.get("email")
 
     if not email:
+        logging.info("Password reset request with no email provided.")
         return jsonify({"error": "Email required"}), 400
 
     user = storage.filter_by(User, email=email)
 
     if not user:
+        logging.error(f"Password reset request for non-existent email: {email}.")
         return jsonify({"error": "User not found"}), 404
 
-    # Generate a reset token
     reset_token = str(uuid.uuid4())
-
     user.reset_token = reset_token
     storage.save()
 
+    logging.info(f"Password reset token generated for {email}.")
     return jsonify({"email": email, "reset_token": reset_token}), 200
 
 
@@ -150,15 +178,18 @@ def request_password_reset() -> str:
 def reset_password_with_token() -> str:
     """Redirect the user to change the password using the reset token."""
     token = request.form.get("token")
-    
+
     if not token:
+        logging.info("Password reset confirmation attempt with no token.")
         return jsonify({"error": "Missing fields"}), 400
 
     user = storage.filter_by(User, reset_token=token)
+
     if not user:
+        logging.error(f"Invalid or expired token used: {token}.")
         return jsonify({"error": "Invalid or expired token"}), 400
 
-    # Redirect to the change-password route
+    logging.info(f"Password reset confirmed for user with token: {token}.")
     return redirect(url_for('app_views.change_password', token=token))
 
 
@@ -170,21 +201,26 @@ def change_password() -> str:
     confirm_password = request.form.get("confirm_password")
 
     if not token or not new_password or not confirm_password:
+        logging.info("Password change attempt with missing fields.")
         return jsonify({"error": "Missing fields"}), 400
     
     if new_password != confirm_password:
+        logging.info("Password change attempt with non-matching passwords.")
         return jsonify({"error": "Passwords do not match"}), 400
 
-    # Find user by reset token
     user = storage.filter_by(User, reset_token=token)
+
     if not user:
+        logging.error(f"Password change failed with invalid token: {token}.")
         return jsonify({"error": "Invalid or expired token"}), 400
 
     try:
         setattr(user, "password", new_password)
         user.reset_token = None
         storage.save()
+        logging.info(f"User {user.id} successfully changed their password.")
     except Exception as e:
+        logging.error(f"Failed to update password for user {user.id}: {e}")
         return jsonify({"error": "Failed to update password"}), 500
 
     return jsonify({"message": "Password reset successfully"}), 200
@@ -193,48 +229,46 @@ def change_password() -> str:
 @app_views.route('/users/me/profile-picture', methods=['POST'], strict_slashes=False)
 def update_profile_picture() -> str:
     """Update the authenticated user's profile picture"""
-    # Check if the user is logged in
     if 'user_id' not in session:
+        logging.info("Profile picture update attempt with no active session.")
         return jsonify({"error": "No active session"}), 401
     
     user_id = session.get('user_id')
     user = storage.get(User, user_id)
     
     if not user:
+        logging.error(f"Profile picture update failed for non-existent user {user_id}.")
         return jsonify({"error": "User not found"}), 404
 
-    # Check if the file is in the request
     file = request.files.get('file')
     if not file:
+        logging.info(f"User {user_id} attempted to upload profile picture without a file.")
         return jsonify({"error": "No file uploaded"}), 400
 
-    # Check if the file size is within the limit
     if request.content_length > MAX_CONTENT_LENGTH:
+        logging.info(f"User {user_id} attempted to upload an oversized profile picture.")
         return jsonify({"error": "File is too large"}), 400
 
-    # Check the file's signature (magic number)
     file_type = imghdr.what(file)
     if not file_type or file_type not in ALLOWED_EXTENSIONS:
+        logging.info(f"User {user_id} attempted to upload an invalid file type: {file_type}.")
         return jsonify({"error": "Invalid file type"}), 400
 
-    # Ensure upload directory exists
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
-    # Save the original image securely
     filename = secure_filename(file.filename)
     file_path = os.path.join(UPLOAD_FOLDER, f"{user_id}_profile.jpg")
     file.save(file_path)
 
-    # Generate a thumbnail for the profile picture
     thumbnail_path = os.path.join(UPLOAD_FOLDER, f"{user_id}_profile_thumbnail.jpg")
     try:
         image = Image.open(file_path)
-        image.thumbnail((100, 100))  # Create a 100x100 thumbnail
+        image.thumbnail((100, 100))
         image.save(thumbnail_path)
+        logging.info(f"User {user_id} successfully updated their profile picture.")
     except Exception as e:
+        logging.error(f"Error processing image for user {user_id}: {e}")
         return jsonify({"error": "Error processing image"}), 500
 
-    # Update the user profile picture URL
     user.profile_picture_url = thumbnail_path
     storage.save()
 
