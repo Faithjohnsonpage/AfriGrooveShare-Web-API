@@ -12,15 +12,15 @@ import uuid
 import logging
 
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler("users.log"),
-        logging.StreamHandler()
-    ]
-)
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+file_handler = logging.FileHandler('users.log')
+file_handler.setFormatter(formatter)
+stream_handler = logging.StreamHandler()
+stream_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
+logger.addHandler(stream_handler)
 
 
 UPLOAD_FOLDER = 'api/v1/uploads/profile_pics'
@@ -41,7 +41,7 @@ def register() -> str:
     
     # Check if the email is already registered
     if storage.exists(User, email=email):
-        logger.info(f"Email {email} already registered")
+        logger.info(f"Email {email[:4]}***@*** already registered")
         return jsonify({"error": "Email already registered"}), 400
 
     # Create and save the new user
@@ -52,7 +52,7 @@ def register() -> str:
     storage.new(user)
     storage.save()
 
-    logger.info(f"New user registered: {username} ({email})")
+    logger.info(f"New user registered: ({email[:4]}***@***)")
     return jsonify({"message": "User registered successfully", "userId": user.id}), 201
 
 
@@ -69,12 +69,12 @@ def login() -> str:
     user = storage.filter_by(User, email=email)
     
     if not user or not user.verify_password(password):
-        logger.warning(f"Failed login attempt for email: {email}")
+        logger.warning(f"Failed login attempt for email: {email[:4]}***@***")
         return jsonify({"error": "Invalid email or password"}), 401
     
     # Set user_id in session
     session['user_id'] = user.id
-    logger.info(f"User {user.username} logged in successfully")
+    logger.info(f"User logged in successfully")
     return jsonify({"message": "Logged in successfully", "userId": user.id}), 200
 
 
@@ -141,7 +141,7 @@ def update_profile() -> str:
     # Ensure the new username is not already taken
     existing_user = storage.filter_by(User, username=username)
     if existing_user and existing_user.id != user_id:
-        logging.info(f"User {user_id} attempted to use an already existing username: {username}.")
+        logging.info(f"User {user_id} attempted to use an already existing username: {username[:4]}***.")
         return jsonify({"error": "Username already exists"}), 400
 
     # Update username
@@ -163,14 +163,14 @@ def request_password_reset() -> str:
     user = storage.filter_by(User, email=email)
 
     if not user:
-        logging.error(f"Password reset request for non-existent email: {email}.")
+        logging.error(f"Password reset request for non-existent email: {email[:4]}***@***.")
         return jsonify({"error": "User not found"}), 404
 
     reset_token = str(uuid.uuid4())
     user.reset_token = reset_token
     storage.save()
 
-    logging.info(f"Password reset token generated for {email}.")
+    logging.info(f"Password reset token generated for {email[:4]}***@***.")
     return jsonify({"email": email, "reset_token": reset_token}), 200
 
 
