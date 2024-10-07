@@ -5,11 +5,11 @@ from flask import Flask, jsonify
 from flask_cors import CORS
 from flask_session import Session
 from models import storage
+from flask_caching import Cache
 from api.v1.views import app_views
 
 
 app = Flask(__name__)
-
 
 # Flask-Session configuration
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
@@ -20,10 +20,17 @@ app.config['SESSION_USE_SIGNER'] = True
 app.config['SESSION_PERMANENT'] = False
 app.config['SESSION_KEY_PREFIX'] = 'session:'
 
+# Configure cache (Using Redis as a caching backend)
+app.config['CACHE_TYPE'] = 'RedisCache'
+app.config['CACHE_REDIS_HOST'] = 'localhost'
+app.config['CACHE_REDIS_PORT'] = 6379
+app.config['CACHE_DEFAULT_TIMEOUT'] = 300
+
+cache = Cache(app)
+app.cache = cache
 
 # Initialize Flask-Session
 Session(app)
-
 
 # Register blueprint for routing
 app.register_blueprint(app_views)

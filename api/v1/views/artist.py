@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from flask import jsonify, request, session
+from flask import jsonify, request, session, current_app
 from models import storage
 from models.artist import Artist
 from api.v1.views import app_views
@@ -52,36 +52,42 @@ def create_artist() -> str:
     storage.new(artist)
     storage.save()
 
-    logger.info(f"Artist {artist.name} (ID: {artist.id}) created successfully by user {user_id}.")
+    # Invalidate all artists cache
+    invalidate_all_artists_cache()
+
+    logger.info(f"Artist (ID: {artist.id}) created successfully by user {user_id}.")
     return jsonify({"message": "Artist created successfully", "artistId": artist.id}), 201
 
 
 @app_views.route('/artists/<string:artist_id>', methods=['GET'], strict_slashes=False)
 def get_artist(artist_id: str) -> str:
     """Retrieve an artist by ID"""
-    if 'user_id' not in session:
-        logger.warning("Unauthorized access attempt to get artist details.")
-        return jsonify({"error": "No active session"}), 401
 
-    user_id = session.get('user_id')
-    if not user_id:
-        logger.error("Unauthorized access, session found but user_id missing.")
-        return jsonify({"error": "Unauthorized"}), 401
+    cache_key = f"artist_{artist_id}"
+    cached_artist = current_app.cache.get(cache_key)
+
+    if cached_artist:
+        logger.info(f"Serving cached artist {artist_id}.")
+        return cached_artist, 200
 
     artist = storage.get(Artist, artist_id)
     if not artist:
         logger.warning(f"Artist with ID {artist_id} not found.")
         return jsonify({"error": "Artist not found"}), 404
 
-    logger.info(f"Artist {artist.name} (ID: {artist_id}) retrieved by user {user_id}.")
-    return jsonify({
+    response = jsonify({
         "artist": {
             "id": artist.id,
             "name": artist.name,
             "bio": artist.bio,
             "profile_picture_url": artist.profile_picture_url
         }
-    }), 200
+    })
+
+    current_app.cache.set(cache_key, response, timeout=3600)
+    logger.info(f"Artist (ID: {artist_id}) retrieved and cached.")
+    
+    return response, 200
 
 
 @app_views.route('/artists/<string:artist_id>', methods=['PUT'], strict_slashes=False)
@@ -109,7 +115,13 @@ def update_artist(artist_id: str) -> str:
         artist.bio = bio
 
     storage.save()
-    logger.info(f"Artist {artist.name} (ID: {artist_id}) updated by user {user_id}.")
+
+    # Invalidate all artists cache
+    invalidate_all_artists_cache()
+
+    current_app.cache.delete(f"artist_{artist_id}")
+    logger.info(f"Invalidated cache for artist {artist_id}")
+    logger.info(f"Artist (ID: {artist_id}) updated by user {user_id}.")
     return jsonify({"message": "Artist updated successfully"}), 200
 
 
@@ -132,15 +144,28 @@ def delete_artist(artist_id: str) -> str:
 
     storage.delete(artist)
     storage.save()
-    logger.info(f"Artist {artist.name} (ID: {artist_id}) deleted by user {user_id}.")
+
+    # Invalidate all artists cache
+    invalidate_all_artists_cache()
+
+    current_app.cache.delete(f"artist_{artist_id}")
+    logger.info(f"Invalidated cache for artist {artist_id}")
+    logger.info(f"Artist (ID: {artist_id}) deleted by user {user_id}.")
     return jsonify({"message": "Artist deleted successfully"}), 200
 
 
 @app_views.route('/artists', methods=['GET'], strict_slashes=False)
 def list_artists():
-    """List all artists"""
+    """List all artists with caching"""
     page = int(request.args.get('page', 1))
     limit = int(request.args.get('limit', 10))
+
+    cache_key = f"all_artists_{page}_limit_{limit}"
+    cached_artists = current_app.cache.get(cache_key)
+
+    if cached_artists:
+        logger.info(f"Serving cached list of artists: page {page}, limit {limit}.")
+        return cached_artists, 200
 
     artists = storage.all(Artist)
 
@@ -150,8 +175,7 @@ def list_artists():
     end_index = page * limit
     artists_files = artists[start_index:end_index]
 
-    logger.info(f"User requested list of artists, page {page}, limit {limit}.")
-    return jsonify({
+    response = jsonify({
         "artists": [
             {
                 "id": artist.id,
@@ -162,7 +186,11 @@ def list_artists():
         "total": total_count,
         "page": page,
         "limit": limit
-    }), 200
+    })
+
+    current_app.cache.set(cache_key, response, timeout=3600)
+    logger.info(f"List of artists cached for page {page}, limit {limit}.")
+    return response, 200
 
 
 @app_views.route('/artists/<string:artist_id>/profile-picture', methods=['POST'], strict_slashes=False)
@@ -204,11 +232,12 @@ def update_artist_profile_picture(artist_id: str) -> str:
 
     # Save the original image securely
     filename = secure_filename(file.filename)
-    file_path = os.path.join(UPLOAD_FOLDER, f"{artist_id}_profile.jpg")
+    file_ext = os.path.splitext(filename)[1].lower()
+    file_path = os.path.join(UPLOAD_FOLDER, f"{artist_id}_profile{file_ext}")
     file.save(file_path)
 
     # Generate a thumbnail for the profile picture
-    thumbnail_path = os.path.join(UPLOAD_FOLDER, f"{artist_id}_profile_thumbnail.jpg")
+    thumbnail_path = os.path.join(UPLOAD_FOLDER, f"{artist_id}_profile_thumbnail{file_ext}")
     try:
         image = Image.open(file_path)
         image.thumbnail((500, 500))
@@ -219,5 +248,28 @@ def update_artist_profile_picture(artist_id: str) -> str:
 
     artist.profile_picture_url = thumbnail_path
     storage.save()
+
+    # Invalidate all artists cache
+    invalidate_all_artists_cache()
+
+    current_app.cache.delete(f"artist_{artist_id}")
+    logger.info(f"Invalidated cache for artist {artist_id}")
     logger.info(f"Profile picture for artist {artist_id} updated successfully.")
     return jsonify({"message": "Profile picture updated successfully"}), 200
+
+
+def invalidate_all_artists_cache():
+    """Invalidate all cache entries related to artists."""
+    cache = current_app.cache
+    pattern = "flask_cache_all_artists_*"
+
+    # Get all keys matching the pattern
+    keys_to_delete = [key.decode('utf-8') for key in cache.cache._read_client.keys(pattern)]
+
+    if keys_to_delete:
+        # Adjust the keys for deletion by removing any prefix if necessary
+        adjusted_keys = [key.replace('flask_cache_', '', 1) for key in keys_to_delete]
+        cache.delete_many(*adjusted_keys)
+        logger.info(f"Invalidated {len(adjusted_keys)} cache entries for all artists")
+    else:
+        logger.info("No cache entries found to invalidate for all artists")

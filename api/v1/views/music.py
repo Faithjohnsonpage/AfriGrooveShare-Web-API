@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """This module handles all default RestFul API actions for Users"""
-from flask import request, jsonify, send_file, Response, session
+from flask import request, jsonify, send_file, Response, session, current_app
 from werkzeug.utils import secure_filename
 from models.music import Music
 from models.artist import Artist
@@ -121,15 +121,25 @@ def upload_music() -> str:
     storage.new(new_music)
     storage.save()
 
+    # Invalidate all music cache
+    invalidate_all_music_cache()
+
     logger.info(f'Music {title} uploaded successfully by user {user_id}')
     return jsonify({"message": "Music uploaded successfully", "musicId": new_music.id}), 201
 
 
-@app_views.route('/music/<music_id>', methods=['GET'], strict_slashes=False)
+@app_views.route('/music/<string:music_id>', methods=['GET'], strict_slashes=False)
 def get_music_metadata(music_id: str) -> str:
     """Retrieve metadata for a specific music file."""
-    music = storage.get(Music, music_id)
+    
+    cache_key = f"music_metadata_{music_id}"
+    cached_music = current_app.cache.get(cache_key)
 
+    if cached_music:
+        logger.info(f"Serving cached metadata for music {music_id}.")
+        return cached_music, 200
+
+    music = storage.get(Music, music_id)
     if not music:
         logger.warning(f'Metadata request failed: Music {music_id} not found')
         return jsonify({"error": "Music not found"}), 404
@@ -152,9 +162,11 @@ def get_music_metadata(music_id: str) -> str:
         "uploadDate": music.created_at.strftime('%Y-%m-%d')
     }
 
-    logger.info(f'Metadata for music {music_id} retrieved successfully')
-    return jsonify(music_data), 200
+    response = jsonify(music_data)
+    current_app.cache.set(cache_key, response, timeout=3600)
+    logger.info(f'Metadata for music {music_id} retrieved and cached successfully')
 
+    return response, 200
 
 @app_views.route('/music/<string:music_id>/stream', methods=['GET'], strict_slashes=False)
 def stream_music(music_id: str) -> Response:
@@ -185,25 +197,33 @@ def stream_music(music_id: str) -> Response:
 @app_views.route('/music', methods=['GET'], strict_slashes=False)
 def list_music_files() -> str:
     """Retrieve a list of music files with optional filters"""
+    
     genre = request.args.get('genre')
     artist = request.args.get('artist')
     album = request.args.get('album')
     page = int(request.args.get('page', 1))
     limit = int(request.args.get('limit', 10))
 
+    cache_key = f"all_music_page_{page}_limit_{limit}"
+    cached_music_list = current_app.cache.get(cache_key)
+
+    if cached_music_list:
+        logger.info(f"Serving cached music list (page {page}, limit {limit}).")
+        return cached_music_list, 200
+
     music = storage.all(Music)
 
     # Retrieve associated album, artist, and genre information
-    album = storage.filter_by(Album, title=album)
-    artist = storage.filter_by(Artist, name=artist)
-    genre = storage.filter_by(Genre, name=genre)
+    album_obj = storage.filter_by(Album, title=album)
+    artist_obj = storage.filter_by(Artist, name=artist)
+    genre_obj = storage.filter_by(Genre, name=genre)
 
-    if genre:
-        music = list(filter(lambda m: m.genre_id == genre.id, music))
-    if artist:
-        music = list(filter(lambda m: m.artist_id == artist.id, music))
-    if album:
-        music = list(filter(lambda m: m.album_id == album.id, music))
+    if genre_obj:
+        music = list(filter(lambda m: m.genre_id == genre_obj.id, music))
+    if artist_obj:
+        music = list(filter(lambda m: m.artist_id == artist_obj.id, music))
+    if album_obj:
+        music = list(filter(lambda m: m.album_id == album_obj.id, music))
 
     # Pagination
     total_count = len(music)
@@ -214,12 +234,10 @@ def list_music_files() -> str:
     # Prepare the list of music metadata
     music_list = []
     for m in music_files:
-        # Fetch the related objects based on foreign keys
         artist = storage.get(Artist, m.artist_id)
         album = storage.get(Album, m.album_id)
         genre = storage.get(Genre, m.genre_id)
     
-        # Prepare metadata for each music file
         music_metadata = {
             "id": m.id,
             "title": m.title,
@@ -233,13 +251,17 @@ def list_music_files() -> str:
         }
         music_list.append(music_metadata)
 
-    logger.info(f'List of music files retrieved successfully (page {page}, limit {limit})')
-    return jsonify({
+    response = jsonify({
         "music": music_list,
         "total": total_count,
         "page": page,
         "limit": limit
-    }), 200
+    })
+
+    current_app.cache.set(cache_key, response, timeout=3600)
+    logger.info(f'List of music files (page {page}, limit {limit}) retrieved and cached successfully')
+
+    return response, 200
 
 
 #@app_views.route('/music/<music_id>', methods=['PUT'], strict_slashes=False)
@@ -298,3 +320,20 @@ def search_music() -> str:
 
     logger.info(f'Search query "{query_str}" completed successfully')
     return jsonify(music_list), 200
+
+
+def invalidate_all_music_cache():
+    """Invalidate all cache entries related to music."""
+    cache = current_app.cache
+    pattern = "flask_cache_all_music_*"
+
+    # Get all keys matching the pattern
+    keys_to_delete = [key.decode('utf-8') for key in cache.cache._read_client.keys(pattern)]
+
+    if keys_to_delete:
+        # Adjust the keys for deletion by removing any prefix if necessary
+        adjusted_keys = [key.replace('flask_cache_', '', 1) for key in keys_to_delete]
+        cache.delete_many(*adjusted_keys)
+        logger.info(f"Invalidated {len(adjusted_keys)} cache entries for all music")
+    else:
+        logger.info("No cache entries found to invalidate for all music")

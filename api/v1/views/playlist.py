@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from flask import jsonify, request, session
+from flask import jsonify, request, session, current_app
 from models import storage
 from models.playlist import Playlist
 from models.music import Music
@@ -46,6 +46,9 @@ def create_playlist():
     storage.new(playlist)
     storage.save()
 
+    # Invalidate all playlists cache
+    invalidate_all_playlists_cache()
+
     logger.info(f'Playlist created successfully: {playlist.id}')
     return jsonify({"message": "Playlist created successfully", "playlistId": playlist.id}), 201
 
@@ -84,6 +87,12 @@ def update_playlist(playlist_id: str) -> str:
             playlist.description = description
 
         storage.save()
+
+        # Invalidate all playlists cache
+        invalidate_all_playlists_cache()
+
+        current_app.cache.delete(f"playlist_{playlist_id}")
+        logger.info(f"Invalidated cache for playlist {playlist_id}")
         logger.info(f'Playlist {playlist_id} updated successfully')
         return jsonify({"message": "Playlist updated successfully"}), 200
 
@@ -107,6 +116,11 @@ def update_playlist(playlist_id: str) -> str:
                 logger.error(f'Music with id {music_id} not found')
                 return jsonify({"error": f"Music with id {music_id} not found"}), 404
 
+        # Invalidate all playlists cache
+        invalidate_all_playlists_cache()
+
+        current_app.cache.delete(f"playlist_{playlist_id}")
+        logger.info(f"Invalidated cache for playlist {playlist_id}")
         logger.info(f'Music added to playlist {playlist_id} successfully')
         return jsonify({"message": "Music added to playlist successfully"}), 200
 
@@ -130,6 +144,11 @@ def update_playlist(playlist_id: str) -> str:
                 logger.error(f'Music with id {music_id} not found')
                 return jsonify({"error": f"Music with id {music_id} not found"}), 404
 
+        # Invalidate all playlists cache
+        invalidate_all_playlists_cache()
+
+        current_app.cache.delete(f"playlist_{playlist_id}")
+        logger.info(f"Invalidated cache for playlist {playlist_id}")
         logger.info(f'Music removed from playlist {playlist_id} successfully')
         return jsonify({"message": "Music removed from playlist successfully"}), 200
 
@@ -165,6 +184,11 @@ def delete_playlist(playlist_id: str) -> str:
     storage.delete(playlist)
     storage.save()
 
+    # Invalidate all playlists cache
+    invalidate_all_playlists_cache()
+
+    current_app.cache.delete(f"playlist_{playlist_id}")
+    logger.info(f"Invalidated cache for playlist {playlist_id}")
     logger.info(f'Playlist {playlist_id} deleted successfully')
     return jsonify({"message": "Playlist deleted successfully"}), 200
 
@@ -172,14 +196,23 @@ def delete_playlist(playlist_id: str) -> str:
 @app_views.route('/playlists/<string:playlist_id>', methods=['GET'], strict_slashes=False)
 def get_playlist(playlist_id: str) -> str:
     """Retrieve a playlist by ID"""
+    
+    # Check if the playlist is cached
+    cache_key = f"playlist_{playlist_id}"
+    cached_playlist = current_app.cache.get(cache_key)
+    
+    if cached_playlist:
+        logger.info(f"Serving cached playlist {playlist_id}.")
+        return cached_playlist, 200
+
+    # Fetch the playlist from the database
     playlist = storage.get(Playlist, playlist_id)
     if not playlist:
         logger.error(f'Playlist {playlist_id} not found')
         return jsonify({"error": "Playlist not found"}), 404
 
-    # Return playlist details including associated music
-    logger.info(f'Playlist {playlist_id} retrieved successfully')
-    return jsonify({
+    # Prepare playlist details, including associated music metadata
+    playlist_data = {
         "playlist": {
             "id": playlist.id,
             "name": playlist.name,
@@ -195,4 +228,76 @@ def get_playlist(playlist_id: str) -> str:
                 } for music in playlist.music
             ]
         }
-    }), 200
+    }
+
+    # Cache the playlist response
+    response = jsonify(playlist_data)
+    current_app.cache.set(cache_key, response, timeout=3600)
+    
+    logger.info(f'Playlist {playlist_id} retrieved and cached successfully')
+    return response, 200
+
+
+@app_views.route('/playlists', methods=['GET'], strict_slashes=False)
+def list_playlists() -> str:
+    """Retrieve a list of playlists with optional pagination"""
+    
+    page = int(request.args.get('page', 1))
+    limit = int(request.args.get('limit', 10))
+
+    # Cache key based on pagination
+    cache_key = f"all_playlists_page_{page}_limit_{limit}"
+    cached_playlists = current_app.cache.get(cache_key)
+    
+    if cached_playlists:
+        logger.info(f"Serving cached playlist list (page {page}, limit {limit}).")
+        return cached_playlists, 200
+
+    # Retrieve all playlists
+    playlists = storage.all(Playlist)
+
+    # Pagination
+    total_count = len(playlists)
+    start_index = (page - 1) * limit
+    end_index = page * limit
+    playlist_subset = playlists[start_index:end_index]
+
+    # Prepare the list of playlists with their metadata
+    playlist_data = []
+    for playlist in playlist_subset:
+        playlist_data.append({
+            "id": playlist.id,
+            "name": playlist.name,
+            "music_count": len(playlist.music)
+        })
+
+    response_data = {
+        "playlists": playlist_data,
+        "total": total_count,
+        "page": page,
+        "limit": limit
+    }
+
+    # Cache the response for pagination
+    response = jsonify(response_data)
+    current_app.cache.set(cache_key, response, timeout=3600)
+    
+    logger.info(f'Playlist list retrieved successfully (page {page}, limit {limit}) and cached.')
+    return response, 200
+
+
+def invalidate_all_playlists_cache():
+    """Invalidate all cache entries related to playlists."""
+    cache = current_app.cache
+    pattern = "flask_cache_all_playlists_*"
+
+    # Get all keys matching the pattern
+    keys_to_delete = [key.decode('utf-8') for key in cache.cache._read_client.keys(pattern)]
+
+    if keys_to_delete:
+        # Adjust the keys for deletion by removing any prefix if necessary
+        adjusted_keys = [key.replace('flask_cache_', '', 1) for key in keys_to_delete]
+        cache.delete_many(*adjusted_keys)
+        logger.info(f"Invalidated {len(adjusted_keys)} cache entries for all playlists")
+    else:
+        logger.info("No cache entries found to invalidate for all playlists")

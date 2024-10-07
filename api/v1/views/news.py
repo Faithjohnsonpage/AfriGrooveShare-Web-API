@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from flask import jsonify, request, session
+from flask import jsonify, request, session, current_app
 from models import storage
 from models.news import News
 from models.user import User
@@ -60,6 +60,12 @@ def create_news() -> str:
     storage.new(news)
     storage.save()
 
+    # Invalidate the user's news cache
+    invalidate_user_news_cache(user_id)
+
+    # Invalidate all news cache
+    invalidate_all_news_cache()
+
     logger.info(f"News article '{title}' created successfully by user '{user.username}'.")
     return jsonify({"message": "News created successfully", "newsId": news.id}), 201
 
@@ -67,20 +73,32 @@ def create_news() -> str:
 @app_views.route('/news/<string:news_id>', methods=['GET'], strict_slashes=False)
 def get_news(news_id: str) -> str:
     """Retrieve a news article by ID"""
+    
+    cache_key = f"news_{news_id}"
+    cached_news = current_app.cache.get(cache_key)
+    
+    if cached_news:
+        logger.info(f"Serving cached news article {news_id}.")
+        return cached_news, 200
+    
     news = storage.get(News, news_id)
     if not news:
         logger.warning(f"News article with ID {news_id} not found.")
         return jsonify({"error": "News not found"}), 404
 
-    logger.info(f"News article with ID {news_id} retrieved successfully.")
-    return jsonify({
+    response = jsonify({
         "news": {
             "id": news.id,
             "title": news.title,
             "content": news.content,
             "publicationDate": str(news.created_at)
         }
-    }), 200
+    })
+    
+    current_app.cache.set(cache_key, response, timeout=3600)
+    logger.info(f"News article with ID {news_id} retrieved and cached successfully.")
+    
+    return response, 200
 
 
 @app_views.route('/news/<string:news_id>', methods=['PUT'], strict_slashes=False)
@@ -107,6 +125,16 @@ def update_news(news_id: str) -> str:
         news.content = data["content"]
 
     storage.save()
+
+    # Invalidate the user's news cache
+    invalidate_user_news_cache(user_id)
+
+    # Invalidate all news cache
+    invalidate_all_news_cache()
+
+    current_app.cache.delete(f"news_{news_id}")
+    logger.info(f"Invalidated cache for news {news_id}")
+
     logger.info(f"News article with ID {news_id} updated successfully.")
     return jsonify({"message": "News updated successfully"}), 200
 
@@ -130,16 +158,36 @@ def delete_news(news_id: str) -> str:
 
     storage.delete(news)
     storage.save()
+
+    # Invalidate the user's news cache
+    invalidate_user_news_cache(user_id)
+
+    # Invalidate all news cache
+    invalidate_all_news_cache()
+
+    current_app.cache.delete(f"news_{news_id}")
+    logger.info(f"Invalidated cache for news {news_id}")
+
     logger.info(f"News article with ID {news_id} deleted successfully.")
     return jsonify({"message": "News deleted successfully"}), 200
 
 
 @app_views.route('/news', methods=['GET'], strict_slashes=False)
 def list_news() -> str:
-    """List all news articles"""
+    """List all news articles with caching"""
     page = int(request.args.get('page', 1))
     limit = int(request.args.get('limit', 10))
 
+    # Cache key based on the page and limit
+    cache_key = f"all_news:page_{page}_limit_{limit}"
+    
+    # Try fetching from cache first
+    cached_news = current_app.cache.get(cache_key)
+    if cached_news:
+        logger.info(f"Returning cached news for page {page}, limit {limit}.")
+        return jsonify(cached_news), 200
+
+    # If not in cache, get data from storage
     news = storage.all(News)
 
     # Pagination
@@ -148,8 +196,7 @@ def list_news() -> str:
     end_index = page * limit
     news_articles = news[start_index:end_index]
 
-    logger.info(f"News articles listed successfully: page {page}, limit {limit}.")
-    return jsonify({
+    response_data = {
         "news": [
             {
                 "id": news.id,
@@ -162,4 +209,46 @@ def list_news() -> str:
         "total": total_count,
         "page": page,
         "limit": limit
-    }), 200
+    }
+
+    # Cache the response data
+    current_app.cache.set(cache_key, response_data, timeout=3600)
+    logger.info(f"News articles cached for page {page}, limit {limit}.")
+    
+    return jsonify(response_data), 200
+
+
+def invalidate_user_news_cache(user_id):
+    """Invalidate all cache entries for a user's news"""
+    cache = current_app.cache
+    pattern = f"flask_cache_user_news:{user_id}:page_*"
+
+    # Get all keys matching the pattern (keys are returned as bytes)
+    keys_to_delete = [
+        key.decode('utf-8') for key in cache.cache._read_client.keys(pattern)
+    ]
+
+    # Remove the 'flask_cache_' prefix only when deleting
+    if keys_to_delete:
+        keys_for_deletion = [key.replace('flask_cache_', '', 1) for key in keys_to_delete]
+        cache.delete_many(*keys_for_deletion)
+        logger.info(f"Invalidated {len(keys_for_deletion)} cache entries for user {user_id}")
+    else:
+        logger.info(f"No cache entries found to invalidate for user {user_id}")
+
+
+def invalidate_all_news_cache():
+    """Invalidate all cache entries related to news."""
+    cache = current_app.cache
+    pattern = "flask_cache_all_news:page_*"
+
+    # Get all keys matching the pattern
+    keys_to_delete = [key.decode('utf-8') for key in cache.cache._read_client.keys(pattern)]
+
+    if keys_to_delete:
+        # Adjust the keys for deletion by removing any prefix if necessary
+        adjusted_keys = [key.replace('flask_cache_', '', 1) for key in keys_to_delete]
+        cache.delete_many(*adjusted_keys)
+        logger.info(f"Invalidated {len(adjusted_keys)} cache entries for all news")
+    else:
+        logger.info("No cache entries found to invalidate for all news")

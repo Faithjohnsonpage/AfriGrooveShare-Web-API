@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from flask import jsonify, request, session
+from flask import jsonify, request, session, current_app
 from models import storage
 from models.album import Album
 from models.artist import Artist
@@ -85,6 +85,9 @@ def create_album() -> str:
     storage.new(album)
     storage.save()
 
+    # Invalidate all albums cache
+    invalidate_all_albums_cache()
+
     logger.info(f"Album '{title}' created successfully with ID {album.id}")
     return jsonify({"message": "Album created successfully", "albumId": album.id}), 201
 
@@ -92,6 +95,7 @@ def create_album() -> str:
 @app_views.route('/albums/<string:album_id>', methods=['GET'], strict_slashes=False)
 def get_album(album_id: str) -> str:
     """Retrieve an album by ID"""
+
     if 'user_id' not in session:
         logger.warning("No active session for album retrieval")
         return jsonify({"error": "No active session"}), 401
@@ -101,6 +105,13 @@ def get_album(album_id: str) -> str:
         logger.warning("Unauthorized album retrieval attempt")
         return jsonify({"error": "Unauthorized"}), 401
 
+    cache_key = f"album_{album_id}"
+    cached_album = current_app.cache.get(cache_key)
+
+    if cached_album:
+        logger.info(f"Serving cached album {album_id}.")
+        return cached_album, 200
+
     album = storage.get(Album, album_id)
     if not album:
         logger.error(f"Album with ID {album_id} not found")
@@ -108,8 +119,7 @@ def get_album(album_id: str) -> str:
 
     artist = storage.get(Artist, album.artist_id)
 
-    logger.info(f"Album '{album.title}' retrieved successfully")
-    return jsonify({
+    response = jsonify({
         "album": {
             "id": album.id,
             "title": album.title,
@@ -119,7 +129,12 @@ def get_album(album_id: str) -> str:
             },
             "releaseDate": str(album.release_date),
         }
-    }), 200
+    })
+
+    current_app.cache.set(cache_key, response, timeout=3600)
+    logger.info(f"Album '{album.title}' retrieved and cached successfully.")
+    
+    return response, 200
 
 
 # Commenting out or removing these routes to make albums immutable
@@ -140,6 +155,13 @@ def list_albums() -> str:
     page = int(request.args.get('page', 1))
     limit = int(request.args.get('limit', 10))
 
+    cache_key = f"all_albums_page_{page}_limit_{limit}"
+    cached_albums = current_app.cache.get(cache_key)
+
+    if cached_albums:
+        logger.info(f"Serving cached albums for page {page} with limit {limit}.")
+        return cached_albums, 200
+
     albums = storage.all(Album)
 
     # Pagination
@@ -148,9 +170,7 @@ def list_albums() -> str:
     end_index = page * limit
     album_files = albums[start_index:end_index]
 
-    # Prepare list of albums with artist details
-    logger.info(f"Listing albums, page {page}, limit {limit}")
-    return jsonify({
+    response = jsonify({
         "albums": [
             {
                 "id": album.id,
@@ -165,7 +185,12 @@ def list_albums() -> str:
         "total": total_count,
         "page": page,
         "limit": limit
-    }), 200
+    })
+
+    current_app.cache.set(cache_key, response, timeout=3600)
+    logger.info(f"Albums for page {page} with limit {limit} retrieved and cached successfully.")
+
+    return response, 200
 
 
 @app_views.route('/albums/<string:album_id>/cover-image', methods=['POST'], strict_slashes=False)
@@ -209,11 +234,12 @@ def update_album_cover_image(album_id: str) -> str:
 
     # Save the original image securely
     filename = secure_filename(file.filename)
-    file_path = os.path.join(UPLOAD_FOLDER, f"{album_id}_cover.jpg")
+    file_ext = os.path.splitext(filename)[1].lower()
+    file_path = os.path.join(UPLOAD_FOLDER, f"{album_id}_cover{file_ext}")
     file.save(file_path)
 
     # Generate a thumbnail for the cover image
-    thumbnail_path = os.path.join(UPLOAD_FOLDER, f"{album_id}_cover_thumbnail.jpg")
+    thumbnail_path = os.path.join(UPLOAD_FOLDER, f"{album_id}_cover_thumbnail{file_ext}")
     try:
         image = Image.open(file_path)
         image.thumbnail((500, 500))
@@ -225,5 +251,27 @@ def update_album_cover_image(album_id: str) -> str:
     album.cover_image_url = thumbnail_path
     storage.save()
 
+    # Invalidate all albums cache
+    invalidate_all_albums_cache()
+
+    current_app.cache.delete(f"album_{album_id}")
+    logger.info(f"Invalidated cache for album {album_id}")
     logger.info(f"Cover image updated successfully for album {album_id}")
     return jsonify({"message": "Cover image updated successfully"}), 200
+
+
+def invalidate_all_albums_cache():
+    """Invalidate all cache entries related to albums."""
+    cache = current_app.cache
+    pattern = "flask_cache_all_albums_*"
+
+    # Get all keys matching the pattern
+    keys_to_delete = [key.decode('utf-8') for key in cache.cache._read_client.keys(pattern)]
+
+    if keys_to_delete:
+        # Adjust the keys for deletion by removing any prefix if necessary
+        adjusted_keys = [key.replace('flask_cache_', '', 1) for key in keys_to_delete]
+        cache.delete_many(*adjusted_keys)
+        logger.info(f"Invalidated {len(adjusted_keys)} cache entries for all albums")
+    else:
+        logger.info("No cache entries found to invalidate for all albums")
