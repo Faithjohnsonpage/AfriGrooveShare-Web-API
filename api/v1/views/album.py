@@ -4,6 +4,7 @@ from models import storage
 from models.album import Album
 from models.artist import Artist
 from models.user import User
+from models.music import Music
 from datetime import datetime
 from api.v1.views import app_views
 from werkzeug.utils import secure_filename
@@ -59,6 +60,7 @@ def create_album() -> str:
 
     # Get album details from form data
     title = request.form.get('title')
+    description = request.form.get('description')
     release_date = request.form.get('release_date')
 
     if not title:
@@ -81,6 +83,7 @@ def create_album() -> str:
     album = Album()
     album.title = title
     album.artist_id = artist_id
+    album.description = description
     album.release_date = release_date
     storage.new(album)
     storage.save()
@@ -94,16 +97,7 @@ def create_album() -> str:
 
 @app_views.route('/albums/<string:album_id>', methods=['GET'], strict_slashes=False)
 def get_album(album_id: str) -> str:
-    """Retrieve an album by ID"""
-
-    if 'user_id' not in session:
-        logger.warning("No active session for album retrieval")
-        return jsonify({"error": "No active session"}), 401
-
-    user_id = session.get('user_id')
-    if not user_id:
-        logger.warning("Unauthorized album retrieval attempt")
-        return jsonify({"error": "Unauthorized"}), 401
+    """Retrieve an album by ID along with its associated music"""
 
     cache_key = f"album_{album_id}"
     cached_album = current_app.cache.get(cache_key)
@@ -119,15 +113,30 @@ def get_album(album_id: str) -> str:
 
     artist = storage.get(Artist, album.artist_id)
 
+    # Retrieve all music associated with the album
+    music = storage.all(Music)
+    music_list = list(filter(lambda m: m.album_id == album_id, music))
+
+    # Prepare the music data for the response
+    music_data = []
+    for music in music_list:
+        music_data.append({
+            "id": music.id,
+            "title": music.title,
+            "duration": music.duration,
+            "file_url": music.file_url,
+        })
+
     response = jsonify({
         "album": {
             "id": album.id,
             "title": album.title,
             "artist": {
-                "id": album.artist_id,
+                "id": artist.id,
                 "name": artist.name
             },
             "releaseDate": str(album.release_date),
+            "music": music_data
         }
     })
 

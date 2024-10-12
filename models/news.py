@@ -2,7 +2,7 @@
 """
 News class
 """
-from sqlalchemy import Column, String, Text, DateTime, ForeignKey
+from sqlalchemy import Column, String, Text, DateTime, ForeignKey, Boolean, Enum
 from models.base_model import BaseModel, Base
 from models.user import User
 from datetime import datetime
@@ -18,6 +18,8 @@ class News(BaseModel, Base):
     author = Column(String(255), nullable=True)
     category = Column(String(255), nullable=False)
     user_id = Column(String(60), ForeignKey('Users.id', ondelete='CASCADE'), nullable=False)
+    status = Column(Enum('live', 'private'), default='live', nullable=False)
+    reviewed = Column(Boolean, default=False, nullable=False)
 
     def __init__(self, *args: List[Any], **kwargs: Dict[str, Any]) -> None:
         """Initializes News"""

@@ -18,6 +18,7 @@ class Album(BaseModel, Base):
     artist_id = Column(String(60), ForeignKey('Artists.id', ondelete='CASCADE'), nullable=False)
     release_date = Column(Date)
     cover_image_url = Column(Text)
+    description = Column(Text, nullable=True)
 
     def __init__(self, *args: List[Any], **kwargs: Dict[str, Any]) -> None:
         """Initializes Album"""

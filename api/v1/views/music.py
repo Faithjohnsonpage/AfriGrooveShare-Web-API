@@ -2,7 +2,7 @@
 """This module handles all default RestFul API actions for Users"""
 from flask import request, jsonify, send_file, Response, session, current_app
 from werkzeug.utils import secure_filename
-from models.music import Music
+from models.music import Music, ReleaseType
 from models.artist import Artist
 from models.genre import Genre
 from models.user import User
@@ -15,6 +15,8 @@ from io import BytesIO
 import magic
 from flask import current_app
 import logging
+import imghdr
+from PIL import Image
 
 
 logger = logging.getLogger(__name__)
@@ -29,7 +31,10 @@ logger.addHandler(stream_handler)
 
 
 UPLOAD_FOLDER = 'api/v1/uploads/music'
-MAX_CONTENT_LENGTH = 10 * 1000 * 1000
+COVER_UPLOAD_FOLDER = 'api/v1/uploads/music_cover'
+MAX_CONTENT_LENGTH_IMAGE = 5 * 1000 * 1000
+MAX_CONTENT_LENGTH = 15 * 1000 * 1000
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp'}
 
 
 @app_views.route('/music/upload', methods=['POST'], strict_slashes=False)
@@ -49,13 +54,14 @@ def upload_music() -> str:
     title = request.form.get('title')
     description = request.form.get('description')
     genre = request.form.get('genre')
-    album = request.form.get('album')
+    album_title = request.form.get('album')
     artist_name = request.form.get('artist')
     file = request.files.get('file')
     duration_str = request.form.get('duration')  # Expecting MM:SS format
+    release_date = request.form.get('release_date')
 
     # Check if required fields are provided
-    if not title or not genre or not file:
+    if not title or not genre or not file or not artist_name:
         logger.error(f'Upload failed: Missing required fields for user {user_id}')
         return jsonify({"error": "Missing required fields"}), 400
 
@@ -100,11 +106,6 @@ def upload_music() -> str:
     file.save(music_path)
     logger.info(f'File {filename} saved successfully for user {user_id}')
 
-    album = storage.filter_by(Album, title=album)
-    if not album:
-        logger.error(f'Upload failed: Album {album} not found for user {user_id}')
-        return jsonify({"error": "Album not found"}), 404
-
     genre_obj = storage.filter_by(Genre, name=genre)
     if not genre_obj:
         logger.error(f'Upload failed: Genre {genre} not found for user {user_id}')
@@ -113,11 +114,22 @@ def upload_music() -> str:
     new_music = Music()
     new_music.title = title
     new_music.artist_id = artist.id
-    new_music.album_id = album.id
     new_music.genre_id = genre_obj.id
     new_music.file_url = music_path
-    #new_music.description = description
     new_music.duration = duration
+    new_music.release_date = release_date
+
+    if album_title:
+        album = storage.filter_by(Album, title=album_title)
+        if not album:
+            logger.error(f'Upload failed: Album {album_title} not found for user {user_id}')
+            return jsonify({"error": "Album not found"}), 404
+        new_music.album_id = album.id
+        new_music.release_type = ReleaseType.ALBUM
+    else:
+        new_music.description = description
+        new_music.release_type = ReleaseType.SINGLE
+
     storage.new(new_music)
     storage.save()
 
@@ -154,11 +166,14 @@ def get_music_metadata(music_id: str) -> str:
         "id": music.id,
         "title": music.title,
         "artist": artist.name if artist else "Unknown",
-        "album": album.title if album else "Unknown",
+        "album": album.title if album else None,
         "genre": genre.name if genre else "Unknown",
         "duration": f"{music.duration // 60}:{music.duration % 60:02d}",
         "fileUrl": music.file_url,
-        "coverImageUrl": album.cover_image_url if album else None,
+        "coverImageUrl": music.cover_image_url if music.cover_image_url else None,
+        "releaseType": music.release_type.name,
+        "description": music.description if music.description else None,
+        "releaseDate": music.release_date.strftime('%Y-%m-%d') if music.release_date else None,
         "uploadDate": music.created_at.strftime('%Y-%m-%d')
     }
 
@@ -242,11 +257,15 @@ def list_music_files() -> str:
             "id": m.id,
             "title": m.title,
             "artist": artist.name if artist else "Unknown",
-            "album": album.title if album else "Unknown",
+            "album": album.title if album else None,
             "genre": genre.name if genre else "Unknown",
             "duration": f"{m.duration // 60}:{m.duration % 60:02d}",
             "fileUrl": m.file_url,
-            "coverImageUrl": album.cover_image_url if album else None,
+            "coverImageUrl": m.cover_image_url if m.release_type == ReleaseType.SINGLE else \
+                             (album.cover_image_url if album else None),
+            "releaseType": m.release_type.value,
+            "description": m.description if m.description else None,
+            "releaseDate": m.release_date.strftime('%Y-%m-%d') if m.release_date else None,
             "uploadDate": m.created_at.strftime('%Y-%m-%d')
         }
         music_list.append(music_metadata)
@@ -310,16 +329,86 @@ def search_music() -> str:
             "id": m.id,
             "title": m.title,
             "artist": storage.get(Artist, m.artist_id).name if storage.get(Artist, m.artist_id) else "Unknown",
-            "album": storage.get(Album, m.album_id).title if storage.get(Album, m.album_id) else "Unknown",
-            "genre": storage.get(Genre, m.genre_id).name if storage.get(Genre, m.genre_id) else "Unknown",
-            "duration": f"{m.duration // 60}:{m.duration % 60:02d}",
-            "uploadDate": m.created_at.strftime('%Y-%m-%d'),
-            "file_url": m.file_url
+            "fileUrl": m.file_url,
+            "duration": f"{m.duration // 60}:{m.duration % 60:02d}"
         } for m in matching_music
     ]
 
     logger.info(f'Search query "{query_str}" completed successfully')
     return jsonify(music_list), 200
+
+
+@app_views.route('/music/<string:music_id>/cover-image', methods=['POST'], strict_slashes=False)
+def update_music_cover_image(music_id: str) -> str:
+    """Update the specified music's cover image"""
+    logger.info(f"Attempting to update cover image for music with ID {music_id}")
+
+    if 'user_id' not in session:
+        logger.warning("No active session for cover image update")
+        return jsonify({"error": "No active session"}), 401
+
+    user_id = session.get('user_id')
+    if not user_id:
+        logger.warning("Unauthorized cover image update attempt")
+        return jsonify({"error": "Unauthorized"}), 401
+
+    music = storage.get(Music, music_id)
+    if not music:
+        logger.error(f"Music with ID {music_id} not found")
+        return jsonify({"error": "Music not found"}), 404
+
+    if music.release_type != ReleaseType.SINGLE:
+        logger.warning(f"Cannot update cover image for non-single music with ID {music_id}")
+        return jsonify({"error": "Cover image can only be updated for singles"}), 400
+
+    # Check if the file is in the request
+    file = request.files.get('file')
+    if not file:
+        logger.warning(f"No file uploaded for music {music_id} cover image update")
+        return jsonify({"error": "No file uploaded"}), 400
+
+    # Check if the file size is within the limit
+    if request.content_length > MAX_CONTENT_LENGTH_IMAGE:
+        logger.warning(f"File too large for music {music_id} cover image update")
+        return jsonify({"error": "File is too large"}), 400
+
+    # Check the file's signature (magic number)
+    file_type = imghdr.what(file)
+    if not file_type or file_type not in ALLOWED_EXTENSIONS:
+        logger.warning(f"Invalid file type for music {music_id} cover image update")
+        return jsonify({"error": "Invalid file type"}), 400
+
+    # Ensure upload directory exists
+    os.makedirs(COVER_UPLOAD_FOLDER, exist_ok=True)
+
+    # Save the original image securely
+    filename = secure_filename(file.filename)
+    file_ext = os.path.splitext(filename)[1].lower()
+    file_path = os.path.join(COVER_UPLOAD_FOLDER, f"{music_id}_cover{file_ext}")
+    file.save(file_path)
+
+    # Generate a thumbnail for the cover image
+    thumbnail_path = os.path.join(COVER_UPLOAD_FOLDER, f"{music_id}_cover_thumbnail{file_ext}")
+    try:
+        image = Image.open(file_path)
+        image.thumbnail((500, 500))
+        image.save(thumbnail_path)
+    except Exception as e:
+        logger.error(f"Error processing image for music {music_id}: {str(e)}")
+        return jsonify({"error": "Error processing image"}), 500
+
+    # Update the music object with the new cover image URL
+    music.cover_image_url = file_path
+    music.cover_thumbnail_url = thumbnail_path
+    storage.save()
+
+    # Invalidate all music cache
+    invalidate_all_music_cache()
+    current_app.cache.delete(f"music_{music_id}")
+    logger.info(f"Invalidated cache for music {music_id}")
+
+    logger.info(f"Cover image updated successfully for music {music_id}")
+    return jsonify({"message": "Cover image updated successfully"}), 200
 
 
 def invalidate_all_music_cache():
