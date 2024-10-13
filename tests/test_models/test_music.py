@@ -7,6 +7,7 @@ from models.artist import Artist
 from models.album import Album
 from models.genre import Genre
 from models.user import User
+from models.music import ReleaseType
 
 
 class TestMusicDatabase(unittest.TestCase):
@@ -36,6 +37,7 @@ class TestMusicDatabase(unittest.TestCase):
         self.album.artist_id = self.artist.id
         self.album.release_date = "2024-01-01"
         self.album.cover_image_url = "http://example.com/image.jpg"
+        self.album.description = "This is a test album description."
         self.album.save()
 
         # Create a genre instance
@@ -43,7 +45,7 @@ class TestMusicDatabase(unittest.TestCase):
         self.genre.name = "Pop"
         self.genre.save()
 
-        # Create a music instance
+        # Create a music instance with the new fields
         self.music = Music()
         self.music.title = "Bohemian Rhapsody"
         self.music.artist_id = self.artist.id
@@ -51,7 +53,10 @@ class TestMusicDatabase(unittest.TestCase):
         self.music.genre_id = self.genre.id
         self.music.file_url = "https://example.com/music/bohemian_rhapsody.mp3"
         self.music.duration = 354
-        self.music.release_date="1975-10-31"
+        self.music.release_date = "1975-10-31"
+        self.music.cover_image_url = "http://example.com/music/bohemian_rhapsody_cover.jpg"
+        self.music.description = "A test description for the music track."
+        self.music.release_type = ReleaseType.SINGLE
         self.music.save()
 
     def tearDown(self):
@@ -82,6 +87,9 @@ class TestMusicDatabase(unittest.TestCase):
         self.assertEqual(retrieved_music.genre_id, self.genre.id)
         self.assertEqual(retrieved_music.file_url, "https://example.com/music/bohemian_rhapsody.mp3")
         self.assertEqual(retrieved_music.duration, 354)
+        self.assertEqual(retrieved_music.cover_image_url, "http://example.com/music/bohemian_rhapsody_cover.jpg")
+        self.assertEqual(retrieved_music.description, "A test description for the music track.")
+        self.assertEqual(retrieved_music.release_type, ReleaseType.SINGLE)
 
     def test_music_deletion(self):
         """Test that the Music instance is correctly deleted from the database."""

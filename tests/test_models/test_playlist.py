@@ -8,6 +8,7 @@ from models.user import User
 from models.artist import Artist
 from models.genre import Genre
 from models.album import Album
+from models.music import ReleaseType
 
 
 class TestPlaylistDatabase(unittest.TestCase):
@@ -44,7 +45,7 @@ class TestPlaylistDatabase(unittest.TestCase):
         self.genre.name = "Pop"
         self.genre.save()
 
-        # Create a music instance
+        # Create a music instance with the new fields
         self.music = Music()
         self.music.title = "Bohemian Rhapsody"
         self.music.artist_id = self.artist.id
@@ -53,6 +54,9 @@ class TestPlaylistDatabase(unittest.TestCase):
         self.music.file_url = "https://example.com/music/bohemian_rhapsody.mp3"
         self.music.duration = 354
         self.music.release_date = "1975-10-31"
+        self.music.cover_image_url = "http://example.com/music/bohemian_rhapsody_cover.jpg"
+        self.music.description = "A test description for the music track."
+        self.music.release_type = ReleaseType.SINGLE
         self.music.save()
 
         # Create a playlist instance

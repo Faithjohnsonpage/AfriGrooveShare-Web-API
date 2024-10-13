@@ -34,6 +34,7 @@ class TestAlbumDatabase(unittest.TestCase):
         self.album.artist_id = self.artist.id
         self.album.release_date = "2024-01-01"
         self.album.cover_image_url = "http://example.com/image.jpg"
+        self.album.description = "This is a test album description."
         self.album.save()
 
     def tearDown(self):
@@ -58,6 +59,7 @@ class TestAlbumDatabase(unittest.TestCase):
         self.assertEqual(retrieved_album.artist_id, self.artist.id)
         self.assertEqual(retrieved_album.release_date, "2024-01-01")
         self.assertEqual(retrieved_album.cover_image_url, "http://example.com/image.jpg")
+        self.assertEqual(retrieved_album.description, "This is a test album description.")
 
     def test_album_deletion(self):
         """Test that the album instance is correctly deleted from the database."""

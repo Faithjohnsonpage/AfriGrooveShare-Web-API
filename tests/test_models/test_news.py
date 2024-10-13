@@ -18,7 +18,6 @@ class TestNewsDatabase(unittest.TestCase):
         self.user.profile_picture_url = "http://example.com/profile.jpg"
         self.user.reset_token = "reset_token_value"
         self.user.save()
-        self.user.save()
 
         # Create a news instance
         self.news = News()
@@ -51,6 +50,25 @@ class TestNewsDatabase(unittest.TestCase):
         self.assertEqual(retrieved_news.user_id, self.user.id)
         self.assertEqual(retrieved_news.author, "John Doe")
         self.assertEqual(retrieved_news.category, "Music Technology")
+        self.assertEqual(retrieved_news.status, 'live')
+        self.assertFalse(retrieved_news.reviewed)
+
+    def test_news_update_status(self):
+        """Test updating the status and reviewed fields."""
+        # Verify initial status and reviewed state
+        retrieved_news = storage.get(News, self.news.id)
+        self.assertEqual(retrieved_news.status, 'live')
+        self.assertFalse(retrieved_news.reviewed)
+
+        # Update the news to be 'private' and reviewed
+        retrieved_news.status = 'private'
+        retrieved_news.reviewed = True
+        retrieved_news.save()
+
+        # Verify that the news has been updated
+        updated_news = storage.get(News, self.news.id)
+        self.assertEqual(updated_news.status, 'private')
+        self.assertTrue(updated_news.reviewed)
 
     def test_news_deletion(self):
         """Test that the news instance is correctly deleted from the database."""
