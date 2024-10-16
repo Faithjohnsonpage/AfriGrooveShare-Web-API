@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from flask import jsonify, request, session, current_app
+from flask import jsonify, request, session, current_app, url_for
 from models import storage
 from models.album import Album
 from models.artist import Artist
@@ -92,7 +92,17 @@ def create_album() -> str:
     invalidate_all_albums_cache()
 
     logger.info(f"Album '{title}' created successfully with ID {album.id}")
-    return jsonify({"message": "Album created successfully", "albumId": album.id}), 201
+
+    response = jsonify({
+        "message": "Album created successfully",
+        "albumId": album.id,
+        "_links": {
+            "self": url_for('app_views.get_album', album_id=album.id, _external=True),
+            "update_cover": url_for('app_views.update_album_cover_image', album_id=album.id, _external=True),
+            "all_albums": url_for('app_views.list_albums', _external=True)
+        }
+    })
+    return response, 201
 
 
 @app_views.route('/albums/<string:album_id>', methods=['GET'], strict_slashes=False)
@@ -136,7 +146,12 @@ def get_album(album_id: str) -> str:
                 "name": artist.name
             },
             "releaseDate": str(album.release_date),
-            "music": music_data
+            "music": music_data,
+            "_links": {
+                "self": url_for('app_views.get_album', album_id=album.id, _external=True),
+                "all_albums": url_for('app_views.list_albums', _external=True),
+                "artist": url_for('app_views.get_artist', artist_id=artist.id, _external=True)
+            }
         }
     })
 
@@ -189,11 +204,19 @@ def list_albums() -> str:
                     "name": storage.get(Artist, album.artist_id).name
                 },
                 "releaseDate": str(album.release_date),
+                "links": {
+                    "self": url_for('app_views.get_album', album_id=album.id, _external=True),
+                }
             } for album in album_files
         ],
         "total": total_count,
         "page": page,
-        "limit": limit
+        "limit": limit,
+        "_links": {
+            "self": url_for('app_views.list_albums', page=page, limit=limit, _external=True),
+            "next": url_for('app_views.list_albums', page=page+1, limit=limit, _external=True) if end_index < total_count else None,
+            "prev": url_for('app_views.list_albums', page=page-1, limit=limit, _external=True) if page > 1 else None
+        }
     })
 
     current_app.cache.set(cache_key, response, timeout=3600)
@@ -266,8 +289,15 @@ def update_album_cover_image(album_id: str) -> str:
     current_app.cache.delete(f"album_{album_id}")
     logger.info(f"Invalidated cache for album {album_id}")
     logger.info(f"Cover image updated successfully for album {album_id}")
-    return jsonify({"message": "Cover image updated successfully"}), 200
 
+    response = jsonify({
+        "message": "Cover image updated successfully",
+        "_links": {
+            "album": url_for('app_views.get_album', album_id=album_id, _external=True),
+            "all_albums": url_for('app_views.list_albums', _external=True)
+        }
+    })
+    return response, 200
 
 def invalidate_all_albums_cache():
     """Invalidate all cache entries related to albums."""

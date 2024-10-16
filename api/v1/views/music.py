@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """This module handles all default RestFul API actions for Users"""
-from flask import request, jsonify, send_file, Response, session, current_app
+from flask import request, jsonify, send_file, Response, session, current_app, url_for
 from werkzeug.utils import secure_filename
 from models.music import Music, ReleaseType
 from models.artist import Artist
@@ -137,7 +137,26 @@ def upload_music() -> str:
     invalidate_all_music_cache()
 
     logger.info(f'Music {title} uploaded successfully by user {user_id}')
-    return jsonify({"message": "Music uploaded successfully", "musicId": new_music.id}), 201
+
+    # Build response links based on release type
+    response_links = {
+        "self": {"href": url_for('app_views.get_music_metadata', music_id=new_music.id, _external=True)},
+        "stream": {"href": url_for('app_views.stream_music', music_id=new_music.id, _external=True)},
+        "all_music": {"href": url_for('app_views.list_music_files', _external=True)}
+    }
+
+    # Add update_cover link only for singles
+    if new_music.release_type == ReleaseType.SINGLE:
+        response_links["update_cover"] = {
+            "href": url_for('app_views.update_music_cover_image', music_id=new_music.id, _external=True)
+        }
+
+    response = jsonify({
+        "message": "Music uploaded successfully",
+        "musicId": new_music.id,
+        "_links": response_links
+    })
+    return response, 201
 
 
 @app_views.route('/music/<string:music_id>', methods=['GET'], strict_slashes=False)
@@ -175,6 +194,14 @@ def get_music_metadata(music_id: str) -> str:
         "description": music.description if music.description else None,
         "releaseDate": music.release_date.strftime('%Y-%m-%d') if music.release_date else None,
         "uploadDate": music.created_at.strftime('%Y-%m-%d')
+    }
+
+    music_data["_links"] = {
+        "self": url_for('app_views.get_music_metadata', music_id=music.id, _external=True),
+        "stream": url_for('app_views.stream_music', music_id=music.id, _external=True),
+        "all_music": url_for('app_views.list_music_files', _external=True),
+        "artist": url_for('app_views.get_artist', artist_id=music.artist_id, _external=True),
+        "album": url_for('app_views.get_album', album_id=music.album_id, _external=True) if music.album_id else None,
     }
 
     response = jsonify(music_data)
@@ -270,11 +297,23 @@ def list_music_files() -> str:
         }
         music_list.append(music_metadata)
 
+    for music_metadata in music_list:
+        music_metadata["_links"] = {
+            "self": url_for('app_views.get_music_metadata', music_id=music_metadata["id"], _external=True),
+            "stream": url_for('app_views.stream_music', music_id=music_metadata["id"], _external=True),
+        }
+
     response = jsonify({
         "music": music_list,
         "total": total_count,
         "page": page,
-        "limit": limit
+        "limit": limit,
+        "_links": {
+            "self": url_for('app_views.list_music_files', page=page, limit=limit, _external=True),
+            "next": url_for('app_views.list_music_files', page=page+1, limit=limit, _external=True) if end_index < total_count else None,
+            "prev": url_for('app_views.list_music_files', page=page-1, limit=limit, _external=True) if page > 1 else None,
+            "search": url_for('app_views.search_music', _external=True)
+        }
     })
 
     current_app.cache.set(cache_key, response, timeout=3600)
@@ -333,6 +372,19 @@ def search_music() -> str:
             "duration": f"{m.duration // 60}:{m.duration % 60:02d}"
         } for m in matching_music
     ]
+
+    for music in music_list:
+        music["_links"] = {
+            "self": url_for('app_views.get_music_metadata', music_id=music["id"], _external=True),
+            "stream": url_for('app_views.stream_music', music_id=music["id"], _external=True),
+        }
+
+    response = jsonify({
+        "results": music_list,
+        "_links": {
+            "all_music": url_for('app_views.list_music_files', _external=True)
+        }
+    })
 
     logger.info(f'Search query "{query_str}" completed successfully')
     return jsonify(music_list), 200
@@ -408,7 +460,15 @@ def update_music_cover_image(music_id: str) -> str:
     logger.info(f"Invalidated cache for music {music_id}")
 
     logger.info(f"Cover image updated successfully for music {music_id}")
-    return jsonify({"message": "Cover image updated successfully"}), 200
+
+    response = jsonify({
+        "message": "Cover image updated successfully",
+        "_links": {
+            "music": url_for('app_views.get_music_metadata', music_id=music_id, _external=True),
+            "all_music": url_for('app_views.list_music_files', _external=True)
+        }
+    })
+    return response, 200
 
 
 def invalidate_all_music_cache():

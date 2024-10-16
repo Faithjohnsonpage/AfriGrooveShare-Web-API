@@ -62,7 +62,14 @@ def register() -> str:
     storage.save()
 
     logger.info(f"New user registered")
-    return jsonify({"message": "User registered successfully", "userId": user.id}), 201
+    return jsonify({
+        "message": "User registered successfully",
+        "userId": user.id,
+        "_links": {
+            "self": {"href": url_for("app_views.get_profile", _external=True)},
+            "login": {"href": url_for("app_views.login", _external=True)}
+        }
+    }), 201
 
 
 @app_views.route('/auth/login', methods=['POST'], strict_slashes=False)
@@ -83,8 +90,18 @@ def login() -> str:
 
     # Set user_id in session
     session['user_id'] = user.id
+
     logger.info(f"User logged in successfully")
-    return jsonify({"message": "Logged in successfully", "userId": user.id}), 200
+
+    return jsonify({
+        "message": "Logged in successfully",
+        "userId": user.id,
+        "_links": {
+            "self": {"href": url_for("app_views.get_profile", _external=True)},
+            "logout": {"href": url_for("app_views.logout", _external=True)},
+            "update_profile": {"href": url_for("app_views.update_profile", _external=True)}
+        }
+    }), 200
 
 
 @app_views.route('/auth/logout', methods=['POST'], strict_slashes=False)
@@ -109,7 +126,14 @@ def logout() -> str:
         session.clear()
 
         logger.info(f"User {user_id} logged out successfully.")
-        return jsonify({"message": "Logged out successfully"}), 200
+
+        return jsonify({
+            "message": "Logged out successfully",
+            "_links": {
+                "login": {"href": url_for("app_views.login", _external=True)},
+                "register": {"href": url_for("app_views.register", _external=True)}
+            }
+        }), 200
 
     logger.info("Logout attempt with no active session.")
     return jsonify({"error": "No active session"}), 400
@@ -146,7 +170,15 @@ def get_profile() -> str:
             "id": user.id,
             "username": user.username,
             "email": user.email,
-            "profile_picture_url": user.profile_picture_url
+            "profile_picture_url": user.profile_picture_url,
+            "_links": {
+                "self": {"href": url_for("app_views.get_profile", _external=True)},
+                "update_profile": {"href": url_for("app_views.update_profile", _external=True)},
+                "update_profile_picture": {"href": url_for("app_views.update_profile_picture", _external=True)},
+                "user_artists": {"href": url_for("app_views.get_artists_by_user_id", _external=True)},
+                "user_news": {"href": url_for("app_views.get_news_by_user_id", _external=True)},
+                "logout": {"href": url_for("app_views.logout", _external=True)}
+            }
         }
     })
 
@@ -196,7 +228,14 @@ def update_profile() -> str:
     storage.save()
     logger.info(f"User {user_id} updated their profile successfully.")
     current_app.cache.delete(f"user_profile:{user_id}")
-    return jsonify({"message": "Profile updated successfully"}), 200
+    
+    return jsonify({
+        "message": "Profile updated successfully",
+        "_links": {
+            "self": {"href": url_for("app_views.get_profile", _external=True)},
+            "update_profile_picture": {"href": url_for("app_views.update_profile_picture", _external=True)}
+        }
+    }), 200
 
 
 @app_views.route('/users/<string:user_id>', methods=['DELETE'], strict_slashes=False)
@@ -235,7 +274,13 @@ def delete_user(user_id: str) -> str:
         storage.save()
 
         logger.info(f"User with ID {user_id} deleted successfully.")
-        return jsonify({"success": f"User {user_id} deleted successfully"}), 200
+
+        return jsonify({
+            "success": f"User {user_id} deleted successfully",
+            "_links": {
+                "register": {"href": url_for("app_views.register", _external=True)}
+            }
+        }), 200
 
     except Exception as e:
         logger.error(f"Error deleting user {user_id}: {str(e)}")
@@ -262,7 +307,14 @@ def request_password_reset() -> str:
     storage.save()
 
     logger.info(f"Password reset token generated for {email[:4]}***@***.")
-    return jsonify({"email": email, "reset_token": reset_token}), 200
+
+    return jsonify({
+        "email": email,
+        "reset_token": reset_token,
+        "_links": {
+            "confirm_reset": {"href": url_for("app_views.reset_password_with_token", _external=True)}
+        }
+    }), 200
 
 
 @app_views.route('/auth/reset-password/confirm', methods=['POST'], strict_slashes=False)
@@ -314,7 +366,12 @@ def change_password() -> str:
         logger.error(f"Failed to update password for user {user.id}: {e}")
         return jsonify({"error": "Failed to update password"}), 500
 
-    return jsonify({"message": "Password reset successfully"}), 200
+    return jsonify({
+        "message": "Password reset successfully",
+        "_links": {
+            "login": {"href": url_for("app_views.login", _external=True)}
+        }
+    }), 200
 
 
 @app_views.route('/users/me/profile-picture', methods=['POST'], strict_slashes=False)
@@ -367,7 +424,12 @@ def update_profile_picture() -> str:
     # Invalidate cache for the user's profile
     current_app.cache.delete(f"user_profile:{user_id}")
 
-    return jsonify({"message": "Profile picture updated successfully"}), 200
+    return jsonify({
+        "message": "Profile picture updated successfully",
+        "_links": {
+            "self": {"href": url_for("app_views.get_profile", _external=True)}
+        }
+    }), 200
 
 
 @app_views.route('/users/me/artists', methods=['GET'], strict_slashes=False)
@@ -393,8 +455,13 @@ def get_artists_by_user_id() -> str:
     logger.info(f"User {user_id} retrieved their artists successfully.")
 
     artist_list = [{"id": artist.id, "name": artist.name} for artist in user_artists]
+
     return jsonify({
-        "artists": artist_list
+        "artists": artist_list,
+        "_links": {
+            "self": {"href": url_for("app_views.get_artists_by_user_id", _external=True)},
+            "user_profile": {"href": url_for("app_views.get_profile", _external=True)}
+        }
     }), 200
 
 
@@ -451,7 +518,13 @@ def get_news_by_user_id() -> str:
         "news": news_list,
         "total": total_count,
         "page": page,
-        "limit": limit
+        "limit": limit,
+        "_links": {
+            "self": {"href": url_for("app_views.get_news_by_user_id", page=page, limit=limit, _external=True)},
+            "next": {"href": url_for("app_views.get_news_by_user_id", page=page+1, limit=limit, _external=True)} if end_index < total_count else None,
+            "prev": {"href": url_for("app_views.get_news_by_user_id", page=page-1, limit=limit, _external=True)} if page > 1 else None,
+            "user_profile": {"href": url_for("app_views.get_profile", _external=True)}
+        }
     }), 200
 
     # Cache the response with a timeout (e.g., 1 hour)

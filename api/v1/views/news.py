@@ -11,6 +11,7 @@ from PIL import Image
 import imghdr
 import os
 import uuid
+from math import ceil
 
 
 logger = logging.getLogger(__name__)
@@ -81,14 +82,34 @@ def create_news() -> str:
     invalidate_all_news_cache()
 
     logger.info(f"News article '{title}' created successfully.")
-    return jsonify({"message": "News created successfully", "newsId": news.id}), 201
+
+    response_data = {
+        "message": "News created successfully",
+        "newsId": news.id,
+        "_links": {
+            "self": {"href": url_for("app_views.get_news", news_id=news.id, _external=True)},
+            "update": {"href": url_for("app_views.update_news", news_id=news.id, _external=True)},
+            "delete": {"href": url_for("app_views.delete_news", news_id=news.id, _external=True)},
+            "upload_image": {"href": url_for("app_views.upload_news_image", news_id=news.id, _external=True)},
+            "all_news": {"href": url_for("app_views.list_news", _external=True)}
+        }
+    }
+
+    return jsonify(response_data), 201
 
 
 @app_views.route('/news/<string:news_id>', methods=['GET'], strict_slashes=False)
 def get_news(news_id: str) -> str:
     """Retrieve a news article by ID"""
-    
-    cache_key = f"news_{news_id}"
+
+    # Get current user ID (if authenticated)
+    current_user_id = session.get('user_id')
+
+    # Check if the news is cached
+    if current_user_id:
+        cache_key = f"news_{news_id}_user_{current_user_id}"
+    else:
+        cache_key = f"news_{news_id}"
     cached_news = current_app.cache.get(cache_key)
     
     if cached_news:
@@ -115,9 +136,20 @@ def get_news(news_id: str) -> str:
             "publicationDate": str(news.created_at),
             "status": news.status,
             "reviewed": news.reviewed,
-            "images": img_urls
+            "images": img_urls,
+            "_links": {
+                "self": {"href": url_for("app_views.get_news", news_id=news.id, _external=True)},
+                "all_news": {"href": url_for("app_views.list_news", _external=True)}
+            }
         }
     }
+
+    if current_user_id and news.user_id == current_user_id:
+        response_data["news"]["_links"].update({
+            "update": {"href": url_for("app_views.update_news", news_id=news.id, _external=True)},
+            "delete": {"href": url_for("app_views.delete_news", news_id=news.id, _external=True)},
+            "upload_image": {"href": url_for("app_views.upload_news_image", news_id=news.id, _external=True)}
+        })
 
     current_app.cache.set(cache_key, response_data, timeout=3600)
     logger.info(f"News article with ID {news_id} retrieved and cached successfully.")
@@ -157,10 +189,22 @@ def update_news(news_id: str) -> str:
     invalidate_all_news_cache()
 
     current_app.cache.delete(f"news_{news_id}")
+    current_app.cache.delete(f"news_{news_id}_user_{user_id}")
     logger.info(f"Invalidated cache for news {news_id}")
 
     logger.info(f"News article with ID {news_id} updated successfully.")
-    return jsonify({"message": "News updated successfully"}), 200
+
+    response_data = {
+        "message": "News updated successfully",
+        "_links": {
+            "self": {"href": url_for("app_views.get_news", news_id=news_id, _external=True)},
+            "delete": {"href": url_for("app_views.delete_news", news_id=news_id, _external=True)},
+            "upload_image": {"href": url_for("app_views.upload_news_image", news_id=news_id, _external=True)},
+            "all_news": {"href": url_for("app_views.list_news", _external=True)}
+        }
+    }
+
+    return jsonify(response_data), 200
 
 
 @app_views.route('/news/<string:news_id>', methods=['DELETE'], strict_slashes=False)
@@ -190,10 +234,20 @@ def delete_news(news_id: str) -> str:
     invalidate_all_news_cache()
 
     current_app.cache.delete(f"news_{news_id}")
+    current_app.cache.delete(f"news_{news_id}_user_{user_id}")
     logger.info(f"Invalidated cache for news {news_id}")
 
     logger.info(f"News article with ID {news_id} deleted successfully.")
-    return jsonify({"message": "News deleted successfully"}), 200
+
+    response_data = {
+        "message": "News deleted successfully",
+        "_links": {
+            "create_news": {"href": url_for("app_views.create_news", _external=True)},
+            "all_news": {"href": url_for("app_views.list_news", _external=True)}
+        }
+    }
+
+    return jsonify(response_data), 200
 
 
 @app_views.route('/news', methods=['GET'], strict_slashes=False)
@@ -202,11 +256,16 @@ def list_news() -> str:
     page = int(request.args.get('page', 1))
     limit = int(request.args.get('limit', 10))
 
-    # Cache key based on the page and limit
-    cache_key = f"all_news:page_{page}_limit_{limit}"
-    
-    # Try fetching from cache first
+    # Get current user ID (if authenticated)
+    current_user_id = session.get('user_id')
+
+    # Create different cache keys for authenticated and non-authenticated users
+    if current_user_id:
+        cache_key = f"all_news:page_{page}_limit_{limit}_user_{current_user_id}"
+    else:
+        cache_key = f"all_news:page_{page}_limit_{limit}"    
     cached_news = current_app.cache.get(cache_key)
+
     if cached_news:
         logger.info(f"Returning cached news for page {page}, limit {limit}.")
         return jsonify(cached_news), 200
@@ -221,19 +280,49 @@ def list_news() -> str:
     end_index = page * limit
     news_articles = live_news[start_index:end_index]
 
+    # Build news articles list with appropriate links based on authentication
+    news_list = []
+    for news in news_articles:
+        news_data = {
+            "id": news.id,
+            "title": news.title,
+            "category": news.category,
+            "publicationDate": str(news.created_at),
+            "_links": {
+                "self": {"href": url_for("app_views.get_news", news_id=news.id, _external=True)}
+            }
+        }
+        
+        # Add management links only if user is authenticated and owns the news
+        if current_user_id and news.user_id == current_user_id:
+            news_data["_links"].update({
+                "update": {"href": url_for("app_views.update_news", news_id=news.id, _external=True)},
+                "delete": {"href": url_for("app_views.delete_news", news_id=news.id, _external=True)},
+                "upload_image": {"href": url_for("app_views.upload_news_image", news_id=news.id, _external=True)}
+            })
+        
+        news_list.append(news_data)
+
+    # Build base response with navigation links
     response_data = {
-        "news": [
-            {
-                "id": news.id,
-                "title": news.title,
-                "category": news.category,
-                "publicationDate": str(news.created_at)
-            } for news in news_articles
-        ],
+        "news": news_list,
         "total": total_count,
         "page": page,
-        "limit": limit
+        "limit": limit,
+        "_links": {
+            "self": {"href": url_for("app_views.list_news", page=page, limit=limit, _external=True)},
+            "first": {"href": url_for("app_views.list_news", page=1, limit=limit, _external=True)},
+            "last": {"href": url_for("app_views.list_news", page=ceil(total_count/limit), limit=limit, _external=True)},
+            "next": {"href": url_for("app_views.list_news", page=page+1, limit=limit, _external=True)} if page * limit < total_count else None,
+            "prev": {"href": url_for("app_views.list_news", page=page-1, limit=limit, _external=True)} if page > 1 else None
+        }
     }
+
+    # Add create_news link only for authenticated users
+    if current_user_id:
+        response_data["_links"]["create_news"] = {
+            "href": url_for("app_views.create_news", _external=True)
+        }
 
     # Cache the response data
     current_app.cache.set(cache_key, response_data, timeout=3600)
@@ -302,10 +391,20 @@ def upload_news_image(news_id: str) -> str:
     invalidate_all_news_cache()
 
     current_app.cache.delete(f"news_{news_id}")
+    current_app.cache.delete(f"news_{news_id}_user_{user_id}")
     logger.info(f"Invalidated cache for news {news_id}")
 
     logger.info(f"Image uploaded successfully for news article {news_id}")
-    return jsonify({"message": "Image uploaded successfully"}), 200
+
+    response_data = {
+        "message": "Image uploaded successfully",
+        "_links": {
+            "news": {"href": url_for("app_views.get_news", news_id=news_id, _external=True)},
+            "update_news": {"href": url_for("app_views.update_news", news_id=news_id, _external=True)},
+            "delete_news": {"href": url_for("app_views.delete_news", news_id=news_id, _external=True)},
+            "all_news": {"href": url_for("app_views.list_news", _external=True)}
+        }
+    }
 
 
 def invalidate_user_news_cache(user_id):

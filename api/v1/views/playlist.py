@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from flask import jsonify, request, session, current_app
+from flask import jsonify, request, session, current_app, url_for
 from models import storage
 from models.playlist import Playlist
 from models.music import Music
@@ -50,7 +50,18 @@ def create_playlist():
     invalidate_all_playlists_cache()
 
     logger.info(f'Playlist created successfully: {playlist.id}')
-    return jsonify({"message": "Playlist created successfully", "playlistId": playlist.id}), 201
+
+    response = jsonify({
+        "message": "Playlist created successfully",
+        "playlistId": playlist.id,
+        "_links": {
+            "self": url_for('app_views.get_playlist', playlist_id=playlist.id, _external=True),
+            "update": url_for('app_views.update_playlist', playlist_id=playlist.id, _external=True),
+            "delete": url_for('app_views.delete_playlist', playlist_id=playlist.id, _external=True),
+            "all_playlists": url_for('app_views.list_playlists', _external=True)
+        }
+    })
+    return response, 201
 
 
 @app_views.route('/playlists/<string:playlist_id>', methods=['POST'], strict_slashes=False)
@@ -92,9 +103,19 @@ def update_playlist(playlist_id: str) -> str:
         invalidate_all_playlists_cache()
 
         current_app.cache.delete(f"playlist_{playlist_id}")
+        current_app.cache.delete(f"playlist_{playlist_id}_user_{user_id}")
         logger.info(f"Invalidated cache for playlist {playlist_id}")
         logger.info(f'Playlist {playlist_id} updated successfully')
-        return jsonify({"message": "Playlist updated successfully"}), 200
+
+        response = jsonify({
+            "message": "Playlist updated successfully",
+            "_links": {
+                "self": url_for('app_views.get_playlist', playlist_id=playlist_id, _external=True),
+                "delete": url_for('app_views.delete_playlist', playlist_id=playlist_id, _external=True),
+                "all_playlists": url_for('app_views.list_playlists', _external=True)
+            }
+        })
+        return response, 200
 
     # Handle adding music to the playlist
     elif action == 'add_music':
@@ -120,9 +141,20 @@ def update_playlist(playlist_id: str) -> str:
         invalidate_all_playlists_cache()
 
         current_app.cache.delete(f"playlist_{playlist_id}")
+        current_app.cache.delete(f"playlist_{playlist_id}_user_{user_id}")
         logger.info(f"Invalidated cache for playlist {playlist_id}")
         logger.info(f'Music added to playlist {playlist_id} successfully')
-        return jsonify({"message": "Music added to playlist successfully"}), 200
+
+        response = jsonify({
+            "message": "Music added to playlist successfully",
+            "_links": {
+                "self": url_for('app_views.get_playlist', playlist_id=playlist_id, _external=True),
+                "update": url_for('app_views.update_playlist', playlist_id=playlist_id, _external=True),
+                "delete": url_for('app_views.delete_playlist', playlist_id=playlist_id, _external=True),
+                "all_playlists": url_for('app_views.list_playlists', _external=True)
+            }
+        })
+        return response, 200
 
     # Handle removing music from the playlist
     elif action == 'remove_music':
@@ -148,9 +180,20 @@ def update_playlist(playlist_id: str) -> str:
         invalidate_all_playlists_cache()
 
         current_app.cache.delete(f"playlist_{playlist_id}")
+        current_app.cache.delete(f"playlist_{playlist_id}_user_{user_id}")
         logger.info(f"Invalidated cache for playlist {playlist_id}")
         logger.info(f'Music removed from playlist {playlist_id} successfully')
-        return jsonify({"message": "Music removed from playlist successfully"}), 200
+
+        response = jsonify({
+            "message": "Music removed from playlist successfully",
+            "_links": {
+                "self": url_for('app_views.get_playlist', playlist_id=playlist_id, _external=True),
+                "update": url_for('app_views.update_playlist', playlist_id=playlist_id, _external=True),
+                "delete": url_for('app_views.delete_playlist', playlist_id=playlist_id, _external=True),
+                "all_playlists": url_for('app_views.list_playlists', _external=True)
+            }
+        })
+        return response, 200
 
     logger.warning('Invalid action provided in playlist update request')
     return jsonify({"error": "Invalid action provided"}), 400
@@ -188,17 +231,32 @@ def delete_playlist(playlist_id: str) -> str:
     invalidate_all_playlists_cache()
 
     current_app.cache.delete(f"playlist_{playlist_id}")
+    current_app.cache.delete(f"playlist_{playlist_id}_user_{user_id}")
     logger.info(f"Invalidated cache for playlist {playlist_id}")
     logger.info(f'Playlist {playlist_id} deleted successfully')
-    return jsonify({"message": "Playlist deleted successfully"}), 200
+
+    response = jsonify({
+        "message": "Playlist deleted successfully",
+        "_links": {
+            "all_playlists": url_for('app_views.list_playlists', _external=True),
+            "create_playlist": url_for('app_views.create_playlist', _external=True)
+        }
+    })
+    return response, 200
 
 
 @app_views.route('/playlists/<string:playlist_id>', methods=['GET'], strict_slashes=False)
 def get_playlist(playlist_id: str) -> str:
     """Retrieve a playlist by ID"""
-    
+
+    # Get current user ID (if authenticated)
+    current_user_id = session.get('user_id')
+
     # Check if the playlist is cached
-    cache_key = f"playlist_{playlist_id}"
+    if current_user_id:
+        cache_key = f"playlist_{playlist_id}_user_{current_user_id}"
+    else:
+        cache_key = f"playlist_{playlist_id}"
     cached_playlist = current_app.cache.get(cache_key)
     
     if cached_playlist:
@@ -226,9 +284,26 @@ def get_playlist(playlist_id: str) -> str:
                     "album": storage.get(Album, music.album_id).title if music.album_id else "Unknown",
                     "fileUrl": music.file_url
                 } for music in playlist.music
-            ]
+            ],
+            "_links": {
+                "self": url_for('app_views.get_playlist', playlist_id=playlist_id, _external=True),
+                "all_playlists": url_for('app_views.list_playlists', _external=True)
+            }
         }
     }
+
+    # Add delete and update links only if the user is authenticated and owns the playlist
+    if current_user_id and playlist.user_id == current_user_id:
+        playlist_data["playlist"]["_links"].update({
+            "delete": url_for('app_views.delete_playlist', playlist_id=playlist.id, _external=True),
+            "update": url_for('app_views.update_playlist', playlist_id=playlist.id, _external=True)
+        })
+
+    for music in playlist_data["playlist"]["music"]:
+        music["_links"] = {
+            "self": url_for('app_views.get_music_metadata', music_id=music["id"], _external=True),
+            "stream": url_for('app_views.stream_music', music_id=music["id"], _external=True)
+        }
 
     # Cache the playlist response
     response = jsonify(playlist_data)
@@ -245,17 +320,22 @@ def list_playlists() -> str:
     page = int(request.args.get('page', 1))
     limit = int(request.args.get('limit', 10))
 
-    # Cache key based on pagination
-    cache_key = f"all_playlists_page_{page}_limit_{limit}"
+    # Get current user ID (if authenticated)
+    current_user_id = session.get('user_id')
+
+    if current_user_id:
+        cache_key = f"all_playlists_page_{page}_limit_{limit}_user_{current_user_id}"
+    else:
+        cache_key = f"all_playlists_page_{page}_limit_{limit}"
     cached_playlists = current_app.cache.get(cache_key)
     
     if cached_playlists:
         logger.info(f"Serving cached playlist list (page {page}, limit {limit}).")
         return cached_playlists, 200
-
+    
     # Retrieve all playlists
     playlists = storage.all(Playlist)
-
+    
     # Pagination
     total_count = len(playlists)
     start_index = (page - 1) * limit
@@ -265,19 +345,42 @@ def list_playlists() -> str:
     # Prepare the list of playlists with their metadata
     playlist_data = []
     for playlist in playlist_subset:
-        playlist_data.append({
+        playlist_info = {
             "id": playlist.id,
             "name": playlist.name,
-            "music_count": len(playlist.music)
-        })
-
+            "music_count": len(playlist.music),
+            "_links": {
+                "self": url_for('app_views.get_playlist', playlist_id=playlist.id, _external=True),
+            }
+        }
+        
+        # Add delete and update links only if the user is authenticated and owns the playlist
+        if current_user_id and playlist.user_id == current_user_id:
+            playlist_info["_links"].update({
+                "delete": url_for('app_views.delete_playlist', playlist_id=playlist.id, _external=True),
+                "update": url_for('app_views.update_playlist', playlist_id=playlist.id, _external=True)
+            })
+        
+        playlist_data.append(playlist_info)
+    
     response_data = {
         "playlists": playlist_data,
-        "total": total_count,
+        "total_count": total_count,
         "page": page,
-        "limit": limit
+        "limit": limit,
+        "_links": {
+            "self": url_for('app_views.list_playlists', page=page, limit=limit, _external=True),
+            "next": url_for('app_views.list_playlists', page=page+1, limit=limit, _external=True) if end_index < total_count else None,
+            "prev": url_for('app_views.list_playlists', page=page-1, limit=limit, _external=True) if page > 1 else None,
+            "first": url_for('app_views.list_playlists', page=1, limit=limit, _external=True),
+            "last": url_for('app_views.list_playlists', page=-(total_count // -limit), limit=limit, _external=True),
+        }
     }
-
+    
+    # Add create_playlist link only for authenticated users
+    if current_user_id:
+        response_data["_links"]["create_playlist"] = url_for('app_views.create_playlist', _external=True)
+    
     # Cache the response for pagination
     response = jsonify(response_data)
     current_app.cache.set(cache_key, response, timeout=3600)

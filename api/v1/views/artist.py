@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from flask import jsonify, request, session, current_app
+from flask import jsonify, request, session, current_app, url_for
 from models import storage
 from models.artist import Artist
 from api.v1.views import app_views
@@ -56,14 +56,32 @@ def create_artist() -> str:
     invalidate_all_artists_cache()
 
     logger.info(f"Artist (ID: {artist.id}) created successfully by user {user_id}.")
-    return jsonify({"message": "Artist created successfully", "artistId": artist.id}), 201
+
+    return jsonify({
+        "message": "Artist created successfully",
+        "artistId": artist.id,
+        "_links": {
+            "self": {"href": url_for("app_views.get_artist", artist_id=artist.id, _external=True)},
+            "update": {"href": url_for("app_views.update_artist", artist_id=artist.id, _external=True)},
+            "delete": {"href": url_for("app_views.delete_artist", artist_id=artist.id, _external=True)},
+            "update_profile_picture": {"href": url_for("app_views.update_artist_profile_picture", artist_id=artist.id, _external=True)},
+            "all_artists": {"href": url_for("app_views.list_artists", _external=True)}
+        }
+    }), 201
 
 
 @app_views.route('/artists/<string:artist_id>', methods=['GET'], strict_slashes=False)
 def get_artist(artist_id: str) -> str:
     """Retrieve an artist by ID"""
 
-    cache_key = f"artist_{artist_id}"
+    # Get current user ID (if authenticated)
+    current_user_id = session.get('user_id')
+
+    # Check if the artist is cached
+    if current_user_id:
+        cache_key = f"artist_{artist_id}_user_{current_user_id}"
+    else:
+        cache_key = f"artist_{artist_id}"
     cached_artist = current_app.cache.get(cache_key)
 
     if cached_artist:
@@ -75,15 +93,27 @@ def get_artist(artist_id: str) -> str:
         logger.warning(f"Artist with ID {artist_id} not found.")
         return jsonify({"error": "Artist not found"}), 404
 
-    response = jsonify({
+    artist_data = {
         "artist": {
             "id": artist.id,
             "name": artist.name,
             "bio": artist.bio,
-            "profile_picture_url": artist.profile_picture_url
+            "profile_picture_url": artist.profile_picture_url,
+            "_links": {
+                "self": {"href": url_for("app_views.get_artist", artist_id=artist.id, _external=True)},
+                "all_artists": {"href": url_for("app_views.list_artists", _external=True)}
+            }
         }
-    })
+    }
 
+    if current_user_id and artist.user_id == current_user_id:
+        artist_data["artist"]["_links"].update({
+            "update": {"href": url_for("app_views.update_artist", artist_id=artist.id, _external=True)},
+            "delete": {"href": url_for("app_views.delete_artist", artist_id=artist.id, _external=True)},
+            "update_profile_picture": {"href": url_for("app_views.update_artist_profile_picture", artist_id=artist.id, _external=True)}
+        })
+
+    response = jsonify(artist_data)
     current_app.cache.set(cache_key, response, timeout=3600)
     logger.info(f"Artist (ID: {artist_id}) retrieved and cached.")
     
@@ -120,9 +150,18 @@ def update_artist(artist_id: str) -> str:
     invalidate_all_artists_cache()
 
     current_app.cache.delete(f"artist_{artist_id}")
+    current_app.cache.delete(f"artist_{artist_id}_user_{user_id}")
     logger.info(f"Invalidated cache for artist {artist_id}")
     logger.info(f"Artist (ID: {artist_id}) updated by user {user_id}.")
-    return jsonify({"message": "Artist updated successfully"}), 200
+
+    return jsonify({
+        "message": "Artist updated successfully",
+        "_links": {
+            "self": {"href": url_for("app_views.get_artist", artist_id=artist_id, _external=True)},
+            "update_profile_picture": {"href": url_for("app_views.update_artist_profile_picture", artist_id=artist_id, _external=True)},
+            "all_artists": {"href": url_for("app_views.list_artists", _external=True)}
+        }
+    }), 200
 
 
 @app_views.route('/artists/<string:artist_id>', methods=['DELETE'], strict_slashes=False)
@@ -149,9 +188,17 @@ def delete_artist(artist_id: str) -> str:
     invalidate_all_artists_cache()
 
     current_app.cache.delete(f"artist_{artist_id}")
+    current_app.cache.delete(f"artist_{artist_id}_user_{user_id}")
     logger.info(f"Invalidated cache for artist {artist_id}")
     logger.info(f"Artist (ID: {artist_id}) deleted by user {user_id}.")
-    return jsonify({"message": "Artist deleted successfully"}), 200
+
+    return jsonify({
+        "message": "Artist deleted successfully",
+        "_links": {
+            "all_artists": {"href": url_for("app_views.list_artists", _external=True)},
+            "create_artist": {"href": url_for("app_views.create_artist", _external=True)}
+        }
+    }), 200
 
 
 @app_views.route('/artists', methods=['GET'], strict_slashes=False)
@@ -160,7 +207,13 @@ def list_artists():
     page = int(request.args.get('page', 1))
     limit = int(request.args.get('limit', 10))
 
-    cache_key = f"all_artists_{page}_limit_{limit}"
+    # Get current user ID (if authenticated)
+    current_user_id = session.get('user_id')
+
+    if current_user_id:
+        cache_key = f"all_artists_{page}_limit_{limit}_user_{current_user_id}"
+    else:
+        cache_key = f"all_artists_{page}_limit_{limit}"
     cached_artists = current_app.cache.get(cache_key)
 
     if cached_artists:
@@ -175,19 +228,33 @@ def list_artists():
     end_index = page * limit
     artists_files = artists[start_index:end_index]
 
-    response = jsonify({
+    artist_data = {
         "artists": [
             {
                 "id": artist.id,
                 "name": artist.name,
-                "profile_picture_url": artist.profile_picture_url
+                "profile_picture_url": artist.profile_picture_url,
+                "_links": {
+                    "self": {"href": url_for("app_views.get_artist", artist_id=artist.id, _external=True)}
+                }
             } for artist in artists_files
         ],
         "total": total_count,
         "page": page,
-        "limit": limit
-    })
+        "limit": limit,
+        "_links": {
+            "self": {"href": url_for("app_views.list_artists", page=page, limit=limit, _external=True)},
+            "next": {"href": url_for("app_views.list_artists", page=page+1, limit=limit, _external=True)} if end_index < total_count else None,
+            "prev": {"href": url_for("app_views.list_artists", page=page-1, limit=limit, _external=True)} if page > 1 else None,
+        }
+    }
 
+    if current_user_id:
+        artist_data["_links"].update({
+            "create_artist": {"href": url_for("app_views.create_artist", _external=True)}
+        })
+
+    response = jsonify(artist_data)
     current_app.cache.set(cache_key, response, timeout=3600)
     logger.info(f"List of artists cached for page {page}, limit {limit}.")
     return response, 200
@@ -253,9 +320,18 @@ def update_artist_profile_picture(artist_id: str) -> str:
     invalidate_all_artists_cache()
 
     current_app.cache.delete(f"artist_{artist_id}")
+    current_app.cache.delete(f"artist_{artist_id}_user_{user_id}")
     logger.info(f"Invalidated cache for artist {artist_id}")
     logger.info(f"Profile picture for artist {artist_id} updated successfully.")
-    return jsonify({"message": "Profile picture updated successfully"}), 200
+
+    return jsonify({
+        "message": "Profile picture updated successfully",
+        "_links": {
+            "artist": {"href": url_for("app_views.get_artist", artist_id=artist_id, _external=True)},
+            "update_artist": {"href": url_for("app_views.update_artist", artist_id=artist_id, _external=True)},
+            "all_artists": {"href": url_for("app_views.list_artists", _external=True)}
+        }
+    }), 200
 
 
 def invalidate_all_artists_cache():

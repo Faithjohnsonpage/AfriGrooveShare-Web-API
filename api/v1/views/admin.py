@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """This module handles all admin-related API actions"""
-from flask import jsonify, request, session, current_app
+from flask import jsonify, request, session, current_app, url_for
 from models import storage
 from models.user import User
 from models.artist import Artist
@@ -12,6 +12,7 @@ from models.news import News
 from api.v1.views import app_views
 import logging
 from functools import wraps
+from math import ceil
 from api.v1.views.users import invalidate_all
 
 
@@ -66,12 +67,21 @@ def get_all_users():
 
     logger.info("Admin retrieved all users successfully.")
 
-    return jsonify({
+    response_data = {
         "users": users_list,
         "total_count": total_count,
         "page": page,
-        "limit": limit
-    }), 200
+        "limit": limit,
+        "_links": {
+            "self": {"href": url_for("app_views.get_all_users", page=page, limit=limit, _external=True)},
+            "first": {"href": url_for("app_views.get_all_users", page=1, limit=limit, _external=True)},
+            "last": {"href": url_for("app_views.get_all_users", page=ceil(total_count/limit), limit=limit, _external=True)},
+            "next": {"href": url_for("app_views.get_all_users", page=page+1, limit=limit, _external=True)} if page * limit < total_count else None,
+            "prev": {"href": url_for("app_views.get_all_users", page=page-1, limit=limit, _external=True)} if page > 1 else None
+        }
+    }
+
+    return jsonify(response_data), 200
 
 
 @app_views.route('/admin/users/<string:user_id>', methods=['DELETE'], strict_slashes=False)
@@ -86,7 +96,15 @@ def admin_delete_user(user_id: str) -> str:
     storage.delete(user)
     storage.save()
     logger.info(f"Admin deleted user {user_id} successfully.")
-    return jsonify({"message": "User deleted successfully"}), 200
+
+    response_data = {
+        "message": "User deleted successfully",
+        "_links": {
+            "all_users": {"href": url_for("app_views.get_all_users", _external=True)}
+        }
+    }
+
+    return jsonify(response_data), 200
 
 
 @app_views.route('/admin/artists/<string:artist_id>', methods=['DELETE'], strict_slashes=False)
@@ -107,7 +125,15 @@ def delete_artist_by_admin(artist_id: str) -> str:
         logger.error(f"Error invalidating cache for artists: {str(e)}")
 
     logger.info(f"Admin deleted artist {artist_id} successfully.")
-    return jsonify({"message": "Artist deleted successfully"}), 200
+
+    response_data = {
+        "message": "Artist deleted successfully",
+        "_links": {
+            "all_artists": {"href": url_for("app_views.get_artists", _external=True)}
+        }
+    }
+
+    return jsonify(response_data), 200
 
 
 @app_views.route('/admin/albums/<string:album_id>', methods=['DELETE'], strict_slashes=False)
@@ -128,7 +154,15 @@ def delete_album(album_id: str) -> str:
         logger.error(f"Error invalidating cache for albums: {str(e)}")
 
     logger.info(f"Admin deleted album {album_id} successfully.")
-    return jsonify({"message": "Album deleted successfully"}), 200
+
+    response_data = {
+        "message": "Album deleted successfully",
+        "_links": {
+            "all_albums": {"href": url_for("app_views.get_albums", _external=True)}
+        }
+    }
+
+    return jsonify(response_data), 200
 
 
 @app_views.route('/admin/list', methods=['GET'], strict_slashes=False)
@@ -158,12 +192,21 @@ def get_all_admins() -> str:
 
     logger.info("Admin retrieved all admins successfully.")
 
-    return jsonify({
+    response_data = {
         "admins": admins_list,
         "total_count": total_count,
         "page": page,
-        "limit": limit
-    }), 200
+        "limit": limit,
+        "_links": {
+            "self": {"href": url_for("app_views.get_all_admins", page=page, limit=limit, _external=True)},
+            "first": {"href": url_for("app_views.get_all_admins", page=1, limit=limit, _external=True)},
+            "last": {"href": url_for("app_views.get_all_admins", page=ceil(total_count/limit), limit=limit, _external=True)},
+            "next": {"href": url_for("app_views.get_all_admins", page=page+1, limit=limit, _external=True)} if page * limit < total_count else None,
+            "prev": {"href": url_for("app_views.get_all_admins", page=page-1, limit=limit, _external=True)} if page > 1 else None
+        }
+    }
+
+    return jsonify(response_data), 200
 
 
 @app_views.route('/admin/music/<string:music_id>', methods=['DELETE'], strict_slashes=False)
@@ -189,7 +232,15 @@ def delete_single(music_id: str) -> str:
         logger.error(f"Error invalidating cache for music: {str(e)}")
 
     logger.info(f"Admin deleted single {music_id} successfully.")
-    return jsonify({"message": "Single deleted successfully"}), 200
+
+    response_data = {
+        "message": "Single deleted successfully",
+        "_links": {
+            "all_music": {"href": url_for("app_views.get_music", _external=True)}
+        }
+    }
+
+    return jsonify(response_data), 200
 
 
 #@app_views.route('/admin/users/<string:user_id>/block', methods=['PUT'], strict_slashes=False)
@@ -240,7 +291,16 @@ def delete_news_article(news_id: str) -> str:
         logger.error(f"Error invalidating cache for news: {str(e)}")
 
     logger.info(f"Admin deleted news article {news_id} successfully.")
-    return jsonify({"message": "News article deleted successfully"}), 200
+
+    response_data = {
+        "message": "News article deleted successfully",
+        "_links": {
+            "all_news": {"href": url_for("app_views.list_news", _external=True)},
+            "news_for_review": {"href": url_for("app_views.get_news_for_review", _external=True)}
+        }
+    }
+
+    return jsonify(response_data), 200
 
 
 @app_views.route('/admin/news/review', methods=['GET'], strict_slashes=False)
@@ -269,16 +329,22 @@ def get_news_for_review() -> str:
         } for news in paginated_news
     ]
 
-    # Include pagination metadata
-    response = {
+    response_data = {
         "pending_news": news_for_review,
         "total": total_count,
         "page": page,
-        "limit": limit
+        "limit": limit,
+        "_links": {
+            "self": {"href": url_for("app_views.get_news_for_review", page=page, limit=limit, _external=True)},
+            "first": {"href": url_for("app_views.get_news_for_review", page=1, limit=limit, _external=True)},
+            "last": {"href": url_for("app_views.get_news_for_review", page=ceil(total_count/limit), limit=limit, _external=True)},
+            "next": {"href": url_for("app_views.get_news_for_review", page=page+1, limit=limit, _external=True)} if page * limit < total_count else None,
+            "prev": {"href": url_for("app_views.get_news_for_review", page=page-1, limit=limit, _external=True)} if page > 1 else None
+        }
     }
 
     logger.info(f"Admin retrieved {len(news_for_review)} news posts for review (page {page}).")
-    return jsonify(response), 200
+    return jsonify(response_data), 200
 
 
 @app_views.route('/admin/news/<string:news_id>/review', methods=['POST'], strict_slashes=False)
@@ -306,7 +372,16 @@ def review_news(news_id: str) -> str:
         logger.info(f"Admin rejected news post {news_id}")
 
     storage.save()
-    return jsonify({"message": f"News post {action}d successfully"}), 200
+
+    response_data = {
+        "message": f"News post {action}d successfully",
+        "_links": {
+            "news_article": {"href": url_for("app_views.get_news", news_id=news_id, _external=True)},
+            "news_for_review": {"href": url_for("app_views.get_news_for_review", _external=True)}
+        }
+    }
+
+    return jsonify(response_data), 200
 
 
 @app_views.route('/admin/genres', methods=['POST'], strict_slashes=False)
@@ -329,7 +404,18 @@ def add_genre() -> str:
     storage.save()
 
     logger.info(f"Admin added new genre: {name}.")
-    return jsonify({"message": "Genre added successfully", "id": genre.id}), 201
+
+    response_data = {
+        "message": "Genre added successfully",
+        "id": genre.id,
+        "_links": {
+            "self": {"href": url_for("app_views.update_genre", genre_id=genre.id, _external=True)},
+            "delete": {"href": url_for("app_views.delete_genre", genre_id=genre.id, _external=True)},
+            "all_genres": {"href": url_for("app_views.get_genres", _external=True)}
+        }
+    }
+
+    return jsonify(response_data), 201
 
 
 @app_views.route('/admin/genres/<string:genre_id>', methods=['PUT'], strict_slashes=False)
@@ -349,7 +435,17 @@ def update_genre(genre_id: str) -> str:
     genre.name = name
     storage.save()
     logger.info(f"Admin updated genre {genre_id} to: {name}.")
-    return jsonify({"message": "Genre updated successfully"}), 200
+
+    response_data = {
+        "message": "Genre updated successfully",
+        "_links": {
+            "self": {"href": url_for("app_views.update_genre", genre_id=genre_id, _external=True)},
+            "delete": {"href": url_for("app_views.delete_genre", genre_id=genre_id, _external=True)},
+            "all_genres": {"href": url_for("app_views.get_genres", _external=True)}
+        }
+    }
+
+    return jsonify(response_data), 200
 
 
 @app_views.route('/admin/genres/<string:genre_id>', methods=['DELETE'], strict_slashes=False)
@@ -364,8 +460,16 @@ def delete_genre(genre_id: str) -> str:
     storage.delete(genre)
     storage.save()
     logger.info(f"Admin deleted genre {genre_id} successfully.")
-    return jsonify({"message": "Genre deleted successfully"}), 200
 
+    response_data = {
+        "message": "Genre deleted successfully",
+        "_links": {
+            "all_genres": {"href": url_for("app_views.get_genres", _external=True)},
+            "add_genre": {"href": url_for("app_views.add_genre", _external=True)}
+        }
+    }
+
+    return jsonify(response_data), 200
 
 # Remove or comment out the config management and security logs routes
 # @app_views.route('/admin/config', methods=['GET', 'PUT'], strict_slashes=False)
