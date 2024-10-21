@@ -7,6 +7,8 @@ from flask_session import Session
 from models import storage
 from flask_caching import Cache
 from api.v1.views import app_views
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 
 app = Flask(__name__)
@@ -29,6 +31,15 @@ app.config['CACHE_DEFAULT_TIMEOUT'] = 300
 cache = Cache(app)
 app.cache = cache
 
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=["1000 per day", "200 per hour"],
+    storage_uri=os.getenv('REDIS_URL', "redis://localhost:6379/1")
+)
+
+app.limiter = limiter
+
 # Initialize Flask-Session
 Session(app)
 
@@ -37,7 +48,7 @@ app.register_blueprint(app_views)
 
 
 # Enable Cross-Origin Resource Sharing (CORS)
-cors = CORS(app, resources={r"/api/v1/*": {"origins": "*"}})
+cors = CORS(app, resources={r"/*": {"origins": "*"}})
 
 
 # Define teardown context to close DB connections
