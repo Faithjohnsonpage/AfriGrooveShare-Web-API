@@ -63,8 +63,8 @@ def create_news() -> str:
         logger.warning("Missing title or content during news creation.")
         return jsonify({"error": "Missing title or content"}), 400
 
-    #if len(content.split()) < 500:
-        #return jsonify({"error": "Content must be at least 500 words."}), 400
+    if len(content.split()) < 500:
+        return jsonify({"error": "Content must be at least 500 words."}), 400
 
     news = News()
     news.title = title
@@ -114,7 +114,7 @@ def get_news(news_id: str) -> str:
     
     if cached_news:
         logger.info(f"Serving cached news article {news_id}.")
-        return cached_news, 200
+        return jsonify(cached_news), 200
     
     news = storage.get(News, news_id)
     if not news:
@@ -154,7 +154,7 @@ def get_news(news_id: str) -> str:
     current_app.cache.set(cache_key, response_data, timeout=3600)
     logger.info(f"News article with ID {news_id} retrieved and cached successfully.")
     
-    return response_data, 200
+    return jsonify(response_data), 200
 
 
 @app_views.route('/news/<string:news_id>', methods=['PUT'], strict_slashes=False)
@@ -405,6 +405,8 @@ def upload_news_image(news_id: str) -> str:
             "all_news": {"href": url_for("app_views.list_news", _external=True)}
         }
     }
+
+    return jsonify(response_data), 201
 
 
 def invalidate_user_news_cache(user_id):

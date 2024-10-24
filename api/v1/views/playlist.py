@@ -261,7 +261,7 @@ def get_playlist(playlist_id: str) -> str:
     
     if cached_playlist:
         logger.info(f"Serving cached playlist {playlist_id}.")
-        return cached_playlist, 200
+        return jsonify(cached_playlist), 200
 
     # Fetch the playlist from the database
     playlist = storage.get(Playlist, playlist_id)
@@ -306,11 +306,11 @@ def get_playlist(playlist_id: str) -> str:
         }
 
     # Cache the playlist response
-    response = jsonify(playlist_data)
+    response = playlist_data
     current_app.cache.set(cache_key, response, timeout=3600)
     
     logger.info(f'Playlist {playlist_id} retrieved and cached successfully')
-    return response, 200
+    return jsonify(response), 200
 
 
 @app_views.route('/playlists', methods=['GET'], strict_slashes=False)
@@ -331,7 +331,7 @@ def list_playlists() -> str:
     
     if cached_playlists:
         logger.info(f"Serving cached playlist list (page {page}, limit {limit}).")
-        return cached_playlists, 200
+        return jsonify(cached_playlists), 200
     
     # Retrieve all playlists
     playlists = storage.all(Playlist)
@@ -382,11 +382,10 @@ def list_playlists() -> str:
         response_data["_links"]["create_playlist"] = url_for('app_views.create_playlist', _external=True)
     
     # Cache the response for pagination
-    response = jsonify(response_data)
-    current_app.cache.set(cache_key, response, timeout=3600)
+    current_app.cache.set(cache_key, response_data, timeout=3600)
     
     logger.info(f'Playlist list retrieved successfully (page {page}, limit {limit}) and cached.')
-    return response, 200
+    return jsonify(response_data), 200
 
 
 def invalidate_all_playlists_cache():

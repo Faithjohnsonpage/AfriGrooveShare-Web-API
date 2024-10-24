@@ -137,7 +137,7 @@ def get_album(album_id: str) -> str:
             "file_url": music.file_url,
         })
 
-    response = jsonify({
+    response = {
         "album": {
             "id": album.id,
             "title": album.title,
@@ -153,12 +153,12 @@ def get_album(album_id: str) -> str:
                 "artist": url_for('app_views.get_artist', artist_id=artist.id, _external=True)
             }
         }
-    })
+    }
 
     current_app.cache.set(cache_key, response, timeout=3600)
     logger.info(f"Album '{album.title}' retrieved and cached successfully.")
     
-    return response, 200
+    return jsonify(response), 200
 
 
 # Commenting out or removing these routes to make albums immutable
@@ -194,7 +194,7 @@ def list_albums() -> str:
     end_index = page * limit
     album_files = albums[start_index:end_index]
 
-    response = jsonify({
+    response = {
         "albums": [
             {
                 "id": album.id,
@@ -217,12 +217,12 @@ def list_albums() -> str:
             "next": url_for('app_views.list_albums', page=page+1, limit=limit, _external=True) if end_index < total_count else None,
             "prev": url_for('app_views.list_albums', page=page-1, limit=limit, _external=True) if page > 1 else None
         }
-    })
+    }
 
     current_app.cache.set(cache_key, response, timeout=3600)
     logger.info(f"Albums for page {page} with limit {limit} retrieved and cached successfully.")
 
-    return response, 200
+    return jsonify(response), 200
 
 
 @app_views.route('/albums/<string:album_id>/cover-image', methods=['POST'], strict_slashes=False)
@@ -298,6 +298,7 @@ def update_album_cover_image(album_id: str) -> str:
         }
     })
     return response, 200
+
 
 def invalidate_all_albums_cache():
     """Invalidate all cache entries related to albums."""

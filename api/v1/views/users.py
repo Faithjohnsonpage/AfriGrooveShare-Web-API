@@ -42,6 +42,15 @@ def register() -> str:
         logger.warning("Attempted registration with missing fields")
         return jsonify({"error": "Missing fields"}), 400
 
+    # Validate username
+    if not isinstance(username, str) or username.strip() == "":
+        logger.info("User attempted to register with an invalid username.")
+        return jsonify({"error": "Valid username is required"}), 400, {'Content-Type': 'application/json'}
+
+    if len(username) < 3 or len(username) > 30:
+        logger.info("User attempted to register with a username of invalid length.")
+        return jsonify({"error": "Username must be between 3 and 30 characters"}), 400
+
     # Check if the email is already registered
     if storage.exists(User, email=email):
         logger.info(f"Email already registered")
@@ -165,7 +174,7 @@ def get_profile() -> str:
         logger.error(f"User {user_id} not found.")
         return jsonify({"error": "User not found"}), 404
 
-    user_profile = jsonify({
+    user_profile = {
         "user": {
             "id": user.id,
             "username": user.username,
@@ -180,12 +189,12 @@ def get_profile() -> str:
                 "logout": {"href": url_for("app_views.logout", _external=True)}
             }
         }
-    })
+    }
 
     cache.set(cache_key, user_profile, timeout=3600)
 
     logger.info(f"User {user_id} retrieved their profile successfully.")
-    return user_profile, 200
+    return jsonify(user_profile), 200
 
 
 @app_views.route('/users/me', methods=['PUT'], strict_slashes=False)
@@ -206,10 +215,6 @@ def update_profile() -> str:
     if len(username) < 3 or len(username) > 30:
         logger.info(f"User {user_id} attempted to update profile with username of invalid length.")
         return jsonify({"error": "Username must be between 3 and 30 characters"}), 400
-
-    if not username.isalnum():
-        logger.info(f"User {user_id} attempted to update profile with non-alphanumeric username.")
-        return jsonify({"error": "Username must contain only letters and numbers"}), 400
 
     user = storage.get(User, user_id)
 
@@ -245,14 +250,14 @@ def delete_user(user_id: str) -> str:
         logger.warning("Unauthorized attempt to delete user without authentication.")
         return jsonify({"error": "Unauthorized. Please log in."}), 401
 
-    if session['user_id'] != user_id:
-        logger.warning(f"User {session['user_id']} attempted to delete another user's account (ID: {user_id}).")
-        return jsonify({"error": "Unauthorized. You can only delete your own account."}), 403
-
     user = storage.get(User, user_id)
     if not user:
         logger.warning(f"User with ID {user_id} not found.")
         return jsonify({"error": "User not found"}), 404
+
+    if session['user_id'] != user_id:
+        logger.warning(f"User {session['user_id']} attempted to delete another user's account (ID: {user_id}).")
+        return jsonify({"error": "Unauthorized. You can only delete your own account."}), 403
 
     try:
         cache = current_app.cache
@@ -487,7 +492,7 @@ def get_news_by_user_id() -> str:
 
     if cached_news:
         logger.info(f"Returning cached news for user {user_id}, page {page}.")
-        return cached_news
+        return jsonify(cached_news), 200
 
     # Retrieve all news for the authenticated user
     all_news = storage.all(News)
@@ -501,9 +506,14 @@ def get_news_by_user_id() -> str:
 
     if not news_articles:
         logger.info(f"No news articles found for user {user_id}.")
-        response = jsonify({"news": [], "total": total_count, "page": page, "limit": limit}), 200
+        response = {
+            "news": [],
+            "total": total_count,
+            "page": page,
+            "limit": limit
+        }
         current_app.cache.set(cache_key, response, timeout=3600)
-        return response
+        return jsonify(response), 200
 
     logger.info(f"User {user_id} retrieved their news articles successfully: page {page}, limit {limit}.")
 
@@ -514,7 +524,7 @@ def get_news_by_user_id() -> str:
         } for news in news_articles
     ]
 
-    response = jsonify({
+    response = {
         "news": news_list,
         "total": total_count,
         "page": page,
@@ -525,12 +535,12 @@ def get_news_by_user_id() -> str:
             "prev": {"href": url_for("app_views.get_news_by_user_id", page=page-1, limit=limit, _external=True)} if page > 1 else None,
             "user_profile": {"href": url_for("app_views.get_profile", _external=True)}
         }
-    }), 200
+    }
 
     # Cache the response with a timeout (e.g., 1 hour)
     current_app.cache.set(cache_key, response, timeout=3600)
 
-    return response
+    return jsonify(response), 200
 
 
 def invalidate_all(model: str) -> None:

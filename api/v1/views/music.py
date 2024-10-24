@@ -204,11 +204,11 @@ def get_music_metadata(music_id: str) -> str:
         "album": url_for('app_views.get_album', album_id=music.album_id, _external=True) if music.album_id else None,
     }
 
-    response = jsonify(music_data)
+    response = music_data
     current_app.cache.set(cache_key, response, timeout=3600)
     logger.info(f'Metadata for music {music_id} retrieved and cached successfully')
 
-    return response, 200
+    return jsonify(response), 200
 
 @app_views.route('/music/<string:music_id>/stream', methods=['GET'], strict_slashes=False)
 def stream_music(music_id: str) -> Response:
@@ -303,7 +303,7 @@ def list_music_files() -> str:
             "stream": url_for('app_views.stream_music', music_id=music_metadata["id"], _external=True),
         }
 
-    response = jsonify({
+    response = {
         "music": music_list,
         "total": total_count,
         "page": page,
@@ -314,12 +314,12 @@ def list_music_files() -> str:
             "prev": url_for('app_views.list_music_files', page=page-1, limit=limit, _external=True) if page > 1 else None,
             "search": url_for('app_views.search_music', _external=True)
         }
-    })
+    }
 
     current_app.cache.set(cache_key, response, timeout=3600)
     logger.info(f'List of music files (page {page}, limit {limit}) retrieved and cached successfully')
 
-    return response, 200
+    return jsonify(response), 200
 
 
 #@app_views.route('/music/<music_id>', methods=['PUT'], strict_slashes=False)

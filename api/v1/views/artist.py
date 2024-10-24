@@ -113,11 +113,11 @@ def get_artist(artist_id: str) -> str:
             "update_profile_picture": {"href": url_for("app_views.update_artist_profile_picture", artist_id=artist.id, _external=True)}
         })
 
-    response = jsonify(artist_data)
+    response = artist_data
     current_app.cache.set(cache_key, response, timeout=3600)
     logger.info(f"Artist (ID: {artist_id}) retrieved and cached.")
     
-    return response, 200
+    return jsonify(response), 200
 
 
 @app_views.route('/artists/<string:artist_id>', methods=['PUT'], strict_slashes=False)
@@ -254,10 +254,10 @@ def list_artists():
             "create_artist": {"href": url_for("app_views.create_artist", _external=True)}
         })
 
-    response = jsonify(artist_data)
+    response = artist_data
     current_app.cache.set(cache_key, response, timeout=3600)
     logger.info(f"List of artists cached for page {page}, limit {limit}.")
-    return response, 200
+    return jsonify(response), 200
 
 
 @app_views.route('/artists/<string:artist_id>/profile-picture', methods=['POST'], strict_slashes=False)
