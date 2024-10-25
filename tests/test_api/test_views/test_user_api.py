@@ -13,7 +13,6 @@ from ..test_base_app import BaseTestCase
 from unittest.mock import patch, Mock
 from flask_caching import Cache
 from flask import session, json
-import io
 
 
 MAX_IMAGE_LENGTH = 5 * 1000 * 1000

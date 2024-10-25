@@ -86,7 +86,7 @@ def get_artist(artist_id: str) -> str:
 
     if cached_artist:
         logger.info(f"Serving cached artist {artist_id}.")
-        return cached_artist, 200
+        return jsonify(cached_artist), 200
 
     artist = storage.get(Artist, artist_id)
     if not artist:
