@@ -114,7 +114,7 @@ def get_album(album_id: str) -> str:
 
     if cached_album:
         logger.info(f"Serving cached album {album_id}.")
-        return cached_album, 200
+        return jsonify(cached_album), 200
 
     album = storage.get(Album, album_id)
     if not album:
@@ -184,7 +184,7 @@ def list_albums() -> str:
 
     if cached_albums:
         logger.info(f"Serving cached albums for page {page} with limit {limit}.")
-        return cached_albums, 200
+        return jsonify(cached_albums), 200
 
     albums = storage.all(Album)
 
