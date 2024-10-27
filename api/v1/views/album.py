@@ -145,7 +145,7 @@ def get_album(album_id: str) -> str:
                 "id": artist.id,
                 "name": artist.name
             },
-            "releaseDate": str(album.release_date),
+            "releaseDate": album.release_date.isoformat(),
             "music": music_data,
             "_links": {
                 "self": url_for('app_views.get_album', album_id=album.id, _external=True),

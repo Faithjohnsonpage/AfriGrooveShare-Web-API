@@ -17,6 +17,7 @@ from flask import current_app
 import logging
 import imghdr
 from PIL import Image
+from datetime import datetime
 
 
 logger = logging.getLogger(__name__)
@@ -86,6 +87,14 @@ def upload_music() -> str:
     except ValueError:
         logger.error(f'Upload failed: Invalid duration format by user {user_id}')
         return jsonify({"error": "Invalid duration format. Use MM:SS."}), 400
+
+    # Check if release date is a string
+    if isinstance(release_date, str):
+        try:
+            release_date = datetime.strptime(release_date, "%Y-%m-%d").date()
+        except ValueError:
+            logger.error(f'Invalid release date format for user {user_id}')
+            return jsonify({"error": "Invalid release date format. Use YYYY-MM-DD."}), 400
 
     # Validate the file's MIME type
     filename = secure_filename(file.filename)
@@ -168,7 +177,7 @@ def get_music_metadata(music_id: str) -> str:
 
     if cached_music:
         logger.info(f"Serving cached metadata for music {music_id}.")
-        return cached_music, 200
+        return jsonify(cached_music), 200
 
     music = storage.get(Music, music_id)
     if not music:
@@ -192,7 +201,7 @@ def get_music_metadata(music_id: str) -> str:
         "coverImageUrl": music.cover_image_url if music.cover_image_url else None,
         "releaseType": music.release_type.name,
         "description": music.description if music.description else None,
-        "releaseDate": music.release_date.strftime('%Y-%m-%d') if music.release_date else None,
+        "releaseDate": music.release_date.isoformat() if music.release_date else None,
         "uploadDate": music.created_at.strftime('%Y-%m-%d')
     }
 
@@ -251,7 +260,7 @@ def list_music_files() -> str:
 
     if cached_music_list:
         logger.info(f"Serving cached music list (page {page}, limit {limit}).")
-        return cached_music_list, 200
+        return jsonify(cached_music_list), 200
 
     music = storage.all(Music)
 
@@ -387,7 +396,7 @@ def search_music() -> str:
     })
 
     logger.info(f'Search query "{query_str}" completed successfully')
-    return jsonify(music_list), 200
+    return response, 200
 
 
 @app_views.route('/music/<string:music_id>/cover-image', methods=['POST'], strict_slashes=False)

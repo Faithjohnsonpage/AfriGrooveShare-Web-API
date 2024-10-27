@@ -17,6 +17,7 @@ from ..test_base_app import BaseTestCase
 from unittest.mock import patch, Mock
 from flask_caching import Cache
 from flask import session, json
+from datetime import datetime
 
 
 class MusicTestCase(BaseTestCase):
@@ -53,7 +54,7 @@ class MusicTestCase(BaseTestCase):
         cls.album = Album()
         cls.album.title = "Test Album"
         cls.album.artist_id = cls.artist.id
-        cls.album.release_date = "2024-01-01"
+        cls.album.release_date = datetime.strptime("2024-01-01", "%Y-%m-%d").date()
         cls.album.cover_image_url = "http://example.com/image.jpg"
         cls.album.description = "This is a test album description."
         cls.album.save()
@@ -71,7 +72,7 @@ class MusicTestCase(BaseTestCase):
         cls.music.genre_id = cls.genre.id
         cls.music.file_url = "https://example.com/music/bohemian_rhapsody.mp3"
         cls.music.duration = 354
-        cls.music.release_date = "1975-10-31"
+        cls.music.release_date = datetime.strptime("1975-10-31", "%Y-%m-%d").date()
         cls.music.cover_image_url = "http://example.com/music/bohemian_rhapsody_cover.jpg"
         cls.music.description = "A test description for the music track."
         cls.music.release_type = ReleaseType.SINGLE
@@ -85,7 +86,7 @@ class MusicTestCase(BaseTestCase):
         cls.album_music.genre_id = cls.genre.id
         cls.album_music.file_url = "https://example.com/music/love_of_my_life.mp3"
         cls.album_music.duration = 210
-        cls.album_music.release_date = "1975-11-21"
+        cls.album_music.release_date = datetime.strptime("1975-11-21", "%Y-%m-%d").date()
         cls.album_music.cover_image_url = "http://example.com/music/love_of_my_life_cover.jpg"
         cls.album_music.description = "A beautiful ballad dedicated to Freddie Mercury's lover."
         cls.album_music.release_type = ReleaseType.ALBUM

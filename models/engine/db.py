@@ -60,6 +60,8 @@ class DB:
 
     def get(self, cls: Type[BaseModel], id: str) -> Optional[BaseModel]:
         """Retrieve an object by its primary key"""
+        if id is None:
+            return None
         return self.__session.get(cls, id)
 
     def all(self, cls: Type[BaseModel]) -> List[BaseModel]:

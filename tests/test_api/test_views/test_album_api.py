@@ -14,6 +14,7 @@ from ..test_base_app import BaseTestCase
 from unittest.mock import patch, Mock
 from flask_caching import Cache
 from flask import session, json
+from datetime import datetime
 
 
 ALBUM_COVER_UPLOAD = 'api/v1/uploads/album_cover'
@@ -45,7 +46,7 @@ class AlbumTestCase(BaseTestCase):
         cls.album = Album()
         cls.album.title = "Test Album"
         cls.album.artist_id = cls.artist.id
-        cls.album.release_date = "2024-01-01"
+        cls.album.release_date = datetime.strptime("2024-01-01", "%Y-%m-%d").date()
         cls.album.cover_image_url = "http://example.com/image.jpg"
         cls.album.description = "This is a test album description."
         cls.album.save()
@@ -79,14 +80,10 @@ class AlbumTestCase(BaseTestCase):
                 storage.delete(user)
         storage.save()
 
-        # Clean up test files
-        test_paths = [
-            f"{cls.test_album_id}_cover.jpg",
-        ]
-        for filename in test_paths:
-            path = os.path.join(ALBUM_COVER_UPLOAD, filename)
-            if os.path.exists(path):
-                os.remove(path)
+        # Clean up test file
+        test_path = os.path.join(ALBUM_COVER_UPLOAD, f"{cls.test_album_id}_cover.jpg")
+        if os.path.exists(test_path):
+            os.remove(test_path)
 
     def login_user(self):
         """Helper method to log in the user and set up session"""
@@ -306,6 +303,10 @@ class AlbumTestCase(BaseTestCase):
         response_data = json.loads(response.data)
         self.assertEqual(response_data['message'], 'Cover image updated successfully')
         self.assertIn('_links', response_data)
+
+        mock_image_open.assert_called_once()
+        mock_image.thumbnail.assert_called_once()
+        mock_cache_delete.assert_called_once()
 
     def test_update_album_cover_no_auth(self):
         """Test album cover update without authentication"""

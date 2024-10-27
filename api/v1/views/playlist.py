@@ -84,7 +84,7 @@ def update_playlist(playlist_id: str) -> str:
     # Ensure the user is the owner of the playlist
     if playlist.user_id != user_id:
         logger.warning(f'Unauthorized update attempt by user {user_id} on playlist {playlist_id}')
-        return jsonify({"error": "Unauthorized to delete this playlist"}), 403
+        return jsonify({"error": "Unauthorized to update this playlist"}), 403
 
     action = request.form.get('action')
     name = request.form.get('name')
