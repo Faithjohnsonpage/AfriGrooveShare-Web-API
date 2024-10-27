@@ -11,7 +11,6 @@ from models import storage
 from sqlalchemy.sql import text
 from ..test_base_app import BaseTestCase
 from unittest.mock import patch, Mock, call
-#from flask_caching import Cache
 import flask_caching
 from flask import session, json
 

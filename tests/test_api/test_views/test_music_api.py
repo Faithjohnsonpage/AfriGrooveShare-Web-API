@@ -101,6 +101,11 @@ class MusicTestCase(BaseTestCase):
         if os.path.exists(test_path):
             os.remove(test_path)
 
+        # Clean up any additional instances of the test MP3 in the root or test directories
+        test_file_root_path = Path('test_music.mp3')
+        if test_file_root_path.exists():
+            test_file_root_path.unlink()
+
     def login_user(self):
         """Helper method to log in the user and set up session"""
         with self.client.session_transaction() as session:
