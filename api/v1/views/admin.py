@@ -129,7 +129,7 @@ def delete_artist_by_admin(artist_id: str) -> str:
     response_data = {
         "message": "Artist deleted successfully",
         "_links": {
-            "all_artists": {"href": url_for("app_views.get_artists", _external=True)}
+            "all_artists": {"href": url_for("app_views.list_artists", _external=True)}
         }
     }
 
@@ -158,7 +158,7 @@ def delete_album(album_id: str) -> str:
     response_data = {
         "message": "Album deleted successfully",
         "_links": {
-            "all_albums": {"href": url_for("app_views.get_albums", _external=True)}
+            "all_albums": {"href": url_for("app_views.list_albums", _external=True)}
         }
     }
 
@@ -236,7 +236,7 @@ def delete_single(music_id: str) -> str:
     response_data = {
         "message": "Single deleted successfully",
         "_links": {
-            "all_music": {"href": url_for("app_views.get_music", _external=True)}
+            "all_music": {"href": url_for("app_views.list_music_files", _external=True)}
         }
     }
 
@@ -366,15 +366,17 @@ def review_news(news_id: str) -> str:
     if action == 'approve':
         news.reviewed = True
         logger.info(f"Admin approved news post {news_id}")
+        message_action = "approved"
     else:
         news.status = 'private'
         news.reviewed = True
         logger.info(f"Admin rejected news post {news_id}")
+        message_action = "rejected"
 
     storage.save()
 
     response_data = {
-        "message": f"News post {action}d successfully",
+        "message": f"News post {message_action} successfully",
         "_links": {
             "news_article": {"href": url_for("app_views.get_news", news_id=news_id, _external=True)},
             "news_for_review": {"href": url_for("app_views.get_news_for_review", _external=True)}
@@ -411,7 +413,7 @@ def add_genre() -> str:
         "_links": {
             "self": {"href": url_for("app_views.update_genre", genre_id=genre.id, _external=True)},
             "delete": {"href": url_for("app_views.delete_genre", genre_id=genre.id, _external=True)},
-            "all_genres": {"href": url_for("app_views.get_genres", _external=True)}
+            "all_genres": {"href": url_for("app_views.list_genres", _external=True)}
         }
     }
 
@@ -441,7 +443,7 @@ def update_genre(genre_id: str) -> str:
         "_links": {
             "self": {"href": url_for("app_views.update_genre", genre_id=genre_id, _external=True)},
             "delete": {"href": url_for("app_views.delete_genre", genre_id=genre_id, _external=True)},
-            "all_genres": {"href": url_for("app_views.get_genres", _external=True)}
+            "all_genres": {"href": url_for("app_views.list_genres", _external=True)}
         }
     }
 
@@ -464,7 +466,7 @@ def delete_genre(genre_id: str) -> str:
     response_data = {
         "message": "Genre deleted successfully",
         "_links": {
-            "all_genres": {"href": url_for("app_views.get_genres", _external=True)},
+            "all_genres": {"href": url_for("app_views.list_genres", _external=True)},
             "add_genre": {"href": url_for("app_views.add_genre", _external=True)}
         }
     }

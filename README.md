@@ -16,6 +16,7 @@ The `models/` directory contains the application's data models and database inte
 - **`news.py`**: Defines the `News` model, which represents news articles or updates related to the application. This model includes fields for article content and metadata.
 - **`playlist.py`**: Defines the `Playlist` model, representing user-created playlists. It includes fields for playlist details and relationships with `Music` and `User`.
 - **`user.py`**: Defines the `User` model, which represents users in the system.
+- **'admin.py'**: Provides administrative functions for managing model data and configurations, including creating, updating, and deleting core data objects.
 - **`engine/`**: Contains database engine file:
   - **`db.py`**: Manages database connections and interactions. It includes setup for SQLAlchemy and other database configurations.
 
@@ -39,25 +40,38 @@ The `api/` directory contains the core implementation of the web API for the Afr
     - **`news.py`**: Defines routes and view functions for handling news and updates within the application.
     - **`playlist.py`**: Provides routes and view functions for managing playlists, including adding and removing music tracks from playlists.
     - **`users.py`**: Contains routes and view functions for user management, including registration, login, profile updates, and password management.
+	- **'admin.py'**: Contains administrative endpoints and utilities for managing API-specific data, roles, and permissions.
 
-### `tests/`
+### 'tests/'
 
-The `tests/` directory contains unit tests and integration tests for the AfriGrooveShare application. It is structured as follows:
+The `tests/` directory includes unit and integration tests for the AfriGrooveShare application.
 
-- **`__init__.py`**: Initializes the `tests` module.
+- **test_models/**: Tests for model logic and interactions.
+  - **engine/**: Tests specific to the database engine.
+    - **test_db.py**: Tests for database connection and interaction.
+  - **test_admin.py**: Tests for model-level administrative functions.
+  - **test_album.py**: Tests for the `Album` model.
+  - **test_artist.py**: Tests for the `Artist` model.
+  - **test_base_model.py**: Tests for base model functionality.
+  - **test_genre.py**: Tests for the `Genre` model.
+  - **test_music.py**: Tests for the `Music` model.
+  - **test_news.py**: Tests for the `News` model.
+  - **test_news_image.py**: Tests for image functionality within the `News` model.
+  - **test_playlist.py**: Tests for the `Playlist` model.
+  - **test_user.py**: Tests for the `User` model.
 
-- **`models/`**: Contains tests for the application's models:
-  - **`__init__.py`**: Initializes the `models` test module.
-  - **`engine/`**: Includes tests specific to the database engine.
-  - **`test_artist.py`**: Tests for the `Artist` model.
-  - **`test_genre.py`**: Tests for the `Genre` model.
-  - **`test_news.py`**: Tests for the `News` model.
-  - **`test_user.py`**: Tests for the `User` model.
-  - **`test_album.py`**: Tests for the `Album` model.
-  - **`test_base_model.py`**: Tests for the base model functionality.
-  - **`test_music.py`**: Tests for the `Music` model.
-  - **`test_playlist.py`**: Tests for the `Playlist` model.
-
+- **test_api/**: Tests for the API endpoints and views.
+  - **test_base_app.py**: Tests for general app configuration and base setup.
+  - **test_views/**: Contains tests for each API endpoint.
+    - **test_admin_api.py**: Tests for administrative API endpoints.
+    - **test_album_api.py**: Tests for album-related API endpoints.
+    - **test_artist_api.py**: Tests for artist-related API endpoints.
+    - **test_genre_api.py**: Tests for genre-related API endpoints.
+    - **test_index_api.py**: Tests for index and health-check endpoints.
+    - **test_music_api.py**: Tests for music-related API endpoints.
+    - **test_news_api.py**: Tests for news-related API endpoints.
+    - **test_playlist_api.py**: Tests for playlist-related API endpoints.
+    - **test_user_api.py**: Tests for user management API endpoints.
 ---
 
 ## Setup
@@ -305,6 +319,92 @@ This endpoint retrieves a list of predefined genres, such as Pop, Rock, Jazz, Cl
   curl -X GET "http://localhost:5000/news?page=2&limit=5"
   ```
 
+### Admin Routes
+
+- **`GET /admin/users`**
+Retrieves a list of all users (requires admin privileges).
+
+**Example**:
+```bash
+curl -X GET http://localhost:5000/admin/users -b "session=xD0IC8LzeOEVPi-PyFukoztnHHiEUgTf-bK_ef8UuaU.G4hTy_VIWbFwmQOWTZATLlerHjg"
+```
+
+- **`DELETE /admin/users/<user_id>`**
+Deletes a user by ID (requires admin privileges).
+
+**Example**:
+```bash
+curl -X DELETE http://localhost:5000/admin/users/9c7de808-a6c5-4301-90e0-4bfca94c1811 -b "session=xD0IC8LzeOEVPi-PyFukoztnHHiEUgTf-bK_ef8UuaU.G4hTy_VIWbFwmQOWTZATLlerHjg"
+```
+
+- **`DELETE /admin/albums/<album_id>`**
+Deletes an album by ID (requires admin privileges).
+
+**Example**:
+```bash
+curl -X DELETE http://localhost:5000/admin/albums/0059032f-4adb-4acd-887f-d35058e343f7 -b "session=xD0IC8LzeOEVPi-PyFukoztnHHiEUgTf-bK_ef8UuaU.G4hTy_VIWbFwmQOWTZATLlerHjg"
+```
+
+- **`DELETE /admin/music/<music_id>`**
+Deletes a music item by ID, restricted to non-album releases (requires admin privileges).
+
+**Example**:
+```bash
+curl -X DELETE http://localhost:5000/admin/music/0059032f-4adb-4acd-887f-d35058e343f7 -b "session=xD0IC8LzeOEVPi-PyFukoztnHHiEUgTf-bK_ef8UuaU.G4hTy_VIWbFwmQOWTZATLlerHjg"
+```
+
+- **`DELETE /admin/news/<news_id>`**
+Deletes a news article by ID (requires admin privileges).
+
+**Example**:
+```bash
+curl -X DELETE http://localhost:5000/admin/news/e15430ae-95eb-4d56-a6b7-5fc95235fab5 -b "session=xD0IC8LzeOEVPi-PyFukoztnHHiEUgTf-bK_ef8UuaU.G4hTy_VIWbFwmQOWTZATLlerHjg"
+```
+
+- **`GET /admin/news/review`**
+Retrieves news articles pending review (requires admin privileges).
+
+**Example**:
+```bash
+curl -X GET http://localhost:5000/admin/news/review -b "session=xD0IC8LzeOEVPi-PyFukoztnHHiEUgTf-bK_ef8UuaU.G4hTy_VIWbFwmQOWTZATLlerHjg"
+```
+
+- **`POST /admin/news/<news_id>/review`**
+Approves or rejects a news article based on the `action` provided (requires admin privileges).
+
+- **Request Body**:
+  - `action`: `"approve"` or `"reject"`
+
+**Example**:
+```bash
+curl -X POST http://localhost:5000/admin/news/27e16e32-9929-40e6-ac70-b915ae2f21af/review -b "session=xD0IC8LzeOEVPi-PyFukoztnHHiEUgTf-bK_ef8UuaU.G4hTy_VIWbFwmQOWTZATLlerHjg" \
+-H "Content-Type: application/json" -d '{"action": "reject"}'
+```
+
+- **`POST /admin/genres`**
+Creates a new genre.
+
+- **Request Body**:
+  - `name`: The name of the new genre
+
+**Example**:
+```bash
+curl -X POST http://localhost:5000/admin/genres -b "session=xD0IC8LzeOEVPi-PyFukoztnHHiEUgTf-bK_ef8UuaU.G4hTy_VIWbFwmQOWTZATLlerHjg" \
+-H "Content-Type: application/json" -d '{"name": "Afrobeat"}'
+```
+
+- **`PUT /admin/genres/<genre_id>`**
+Updates a genre by ID.
+
+- **Request Body**:
+  - `name`: The updated name for the genre
+
+**Example**:
+```bash
+curl -X PUT http://localhost:5000/admin/genres/d614151a-20c0-4cd3-bea3-645d0e8b34fa -b "session=xD0IC8LzeOEVPi-PyFukoztnHHiEUgTf-bK_ef8UuaU.G4hTy_VIWbFwmQOWTZATLlerHjg" \
+-H "Content-Type: application/json" -d '{"name": "Afrocentric"}'
+```
+
 ## Conclusion
 
 The AfriGrooveShare Web API provides a robust platform for managing music content, news articles, and user sessions. With its secure and flexible session management, user authentication, and various endpoints for interacting with music and news content, the API offers a comprehensive solution for music lovers, artists, and content creators.
@@ -315,14 +415,32 @@ The AfriGrooveShare Web API provides a robust platform for managing music conten
 - **Extensible Categories**: Support for predefined genres and news categories, ensuring content is organized for easy access and discovery.
 - **Search & Streaming**: Efficient search functionality for music and real-time streaming support.
 - **Pagination & Filtering**: Flexible pagination and filtering options to manage large datasets for music and news content.
-
-### Getting Started
-To get started with the API, ensure your environment is set up correctly, and follow the examples provided for each route. The API supports multiple file types and allows for easy scaling with additional features.
+- **Logging**: Comprehensive logging mechanisms are in place to track API usage and monitor activities, enhancing debugging and providing insights into user interactions.
+- **Hypermedia Support**: The API employs hypermedia principles, providing clients with navigational links in responses to enhance discoverability and usability of available resources.
+- **Rate Limiting**: Implemented rate limiting protects the API from abuse, ensuring fair usage among all clients while maintaining optimal performance.
 
 ### Future Improvements:
 The AfriGrooveShare API is designed to evolve, with plans to introduce:
-- Enhanced search capabilities with advanced filtering options.
-- Support for additional media types and formats.
-- Integration with third-party services for music recommendations, social sharing, and analytics.
+1. **Enhanced Search Capabilities**
+   - Adding advanced filtering options (e.g., by artist, release year, genre).
+   - Support for fuzzy search and auto-suggestions to improve the user experience.
 
-Feel free to contribute or customize the API to fit your specific needs. Thank you for using AfriGrooveShare, and happy coding!
+2. **Support for Additional Media Types and Formats**
+   - Expansion to support video uploads, live performances, and high-quality audio formats.
+   - Streamlining media processing for diverse content types (e.g., music videos, interviews).
+
+3. **Integration with Third-Party Services**
+   - Music recommendation algorithms powered by machine learning.
+   - Integration with social media for content sharing and engagement.
+   - Analytics tools to give insights into content performance and audience engagement.
+
+4. **Enhanced Rate-Limiting**
+   - Adaptive rate limiting based on user behavior, allowing for intelligent adjustment of access thresholds.
+
+5. **User Feedback Mechanism**
+   - Allow users to provide feedback on music content and news articles, adding a community-driven dimension to AfriGrooveShare.
+
+6. **Content Collaboration Tools**
+   - Introducing collaborative playlists, user-curated collections, and artist profiles with media and engagement insights
+
+Feel free to contribute, customize, and expand the API as needed to fit your specific requirements. We welcome your feedback and suggestions! Thank you for using AfriGrooveShare, and happy coding!

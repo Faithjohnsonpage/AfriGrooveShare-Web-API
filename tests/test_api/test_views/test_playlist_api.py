@@ -1,10 +1,7 @@
 #!/usr/bin/env python3
 import unittest
-from io import BytesIO
 from pathlib import Path
-from PIL import Image
 import os
-import imghdr
 from models.user import User
 from models.artist import Artist
 from models.album import Album
